@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Saiko APK Builder</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07110e;color:#eafff4;font-family:Arial,sans-serif;padding:18px}
+header{text-align:center;padding:18px 0}
+.logo{font-size:45px}
+h1{color:#4cff9a;margin:8px 0}
+p{color:#9bb9aa;font-size:14px;line-height:1.5}
+.card{background:#102019;border:1px solid #244535;border-radius:16px;padding:17px;margin:15px 0}
+label{display:block;margin:15px 0 7px;font-size:13px;color:#b9d9c8}
+input,select{width:100%;padding:13px;background:#07140e;border:1px solid #315442;border-radius:9px;color:white;font-size:15px}
+.check{display:flex;align-items:center;gap:10px;margin:13px 0}
+.check input{width:18px;height:18px;accent-color:#35e887}
+button{width:100%;border:0;border-radius:10px;padding:15px;background:#39ed8c;color:#062014;font-weight:bold;font-size:16px;margin-top:15px}
+button:active{opacity:.8}
+#status{white-space:pre-wrap;color:#8dffb8;font-size:13px;margin-top:14px}
+.small{font-size:12px;color:#82998d}
+</style>
+</head>
+<body>
+<header>
+<div class="logo">🛠️</div>
+<h1>Saiko APK Builder</h1>
+<p>Apne HTML, CSS aur JavaScript project ko Android APK mein badalne ke liye.</p>
+</header>
+
+<div class="card">
+<h3>📦 Project Files</h3>
+<label>Project ZIP file</label>
+<input id="zip" type="file" accept=".zip,application/zip">
+<p class="small">Apni website ki sabhi files ek ZIP mein upload karo.</p>
+
+<label>App Icon (optional)</label>
+<input id="icon" type="file" accept="image/png,image/jpeg,image/webp">
+
+<label>App Name</label>
+<input id="appName" value="My Android App" maxlength="40">
+
+<label>Package Name</label>
+<input id="packageName" value="com.saiko.myapp">
+
+<label>Version Name</label>
+<input id="version" value="1.0">
+
+<label>Version Code</label>
+<input id="versionCode" type="number" value="1" min="1">
+
+<label>Build Type</label>
+<select id="buildType">
+<option value="debug">Debug APK (testing)</option>
+<option value="release">Release APK</option>
+</select>
+</div>
+
+<div class="card">
+<h3>🔐 Permissions</h3>
+<div class="check"><input id="internet" type="checkbox" checked><span>Internet</span></div>
+<div class="check"><input id="camera" type="checkbox"><span>Camera</span></div>
+<div class="check"><input id="microphone" type="checkbox"><span>Microphone</span></div>
+<div class="check"><input id="storage" type="checkbox"><span>Photo / File Access</span></div>
+<div class="check"><input id="location" type="checkbox"><span>Location</span></div>
+</div>
+
+<div class="card">
+<h3>☁️ Build Server</h3>
+<label>Backend URL</label>
+<input id="server" type="url" placeholder="https://your-backend.example">
+<p class="small">Backend server configure hone ke baad hi APK build hoga.</p>
+<button id="buildBtn" onclick="buildAPK()">🚀 Build APK</button>
+<div id="status"></div>
+</div>
+
+<script>
+async function buildAPK(){
+ const status=document.getElementById("status");
+ const btn=document.getElementById("buildBtn");
+ const zip=document.getElementById("zip").files[0];
+ const server=document.getElementById("server").value.trim().replace(/\/+$/,"");
+
+ if(!zip){status.textContent="Pehle project ZIP file select karo.";return;}
+ if(!server){status.textContent="Backend URL abhi set nahi hai. Pehle build server configure karna hoga.";return;}
+ if(!/^https?:\/\/.+/i.test(server)){status.textContent="Backend URL sahi nahi hai.";return;}
+
+ const packageName=document.getElementById("packageName").value.trim();
+ if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(packageName)){
+ status.textContent="Package Name sahi format mein likho, jaise com.saiko.myapp";return;
+ }
+
+ const form=new FormData();
+ form.append("project",zip);
+ const icon=document.getElementById("icon").files[0];
+ if(icon)form.append("icon",icon);
+
+ ["appName","packageName","version","versionCode","buildType",
+ "internet","camera","microphone","storage","location"].forEach(id=>{
+ const el=document.getElementById(id);
+ form.append(id,el.type==="checkbox"?String(el.checked):el.value.trim());
+ });
+
+ btn.disabled=true;
+ btn.textContent="⏳ Building...";
+ status.textContent="Build request bheji ja rahi hai...";
+
+ try{
+ const response=await fetch(server+"/build",{method:"POST",body:form});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data.message||"Server error: "+response.status);
+ if(!data.downloadUrl)throw new Error("Server ne APK download link nahi diya.");
+ status.textContent="✅ APK ready!\nDownload link: "+data.downloadUrl;
+ const link=document.createElement("a");
+ link.href=data.downloadUrl;
+ link.textContent="⬇️ Download APK";
+ link.style="display:block;margin-top:18px;color:#4cff9a;word-break:break-all";
+ link.target="_blank";
+ link.rel="noopener";
+ status.appendChild(document.createElement("br"));
+ status.appendChild(link);
+ }catch(e){
+ status.textContent="❌ "+e.message+"\nBackend abhi configured na ho to ye expected hai.";
+ }finally{
+ btn.disabled=false;
+ btn.textContent="🚀 Build APK";
+ }
+}
+</script>
+</body>
+  </html>
