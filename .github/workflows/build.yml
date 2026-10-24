@@ -9,41 +9,38 @@ permissions:
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Download repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Install Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Install Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android Build Tools
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Check project
+      - name: Install Android components
         run: |
-          echo "Checking for Android project..."
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "Android project not found."
-            echo "A WebView Android template must be created first."
-            exit 1
-          fi
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
       - name: Build APK
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Saiko-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
