@@ -1,0 +1,26 @@
+name: Saiko APK Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: "Build ID"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show build request
+        run: |
+          echo "Saiko APK Builder workflow started."
+          echo "Build ID: ${{ inputs.build_id }}"
+          echo "Android APK build system is not configured yet."
