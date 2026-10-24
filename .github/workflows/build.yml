@@ -2,25 +2,48 @@ name: Saiko APK Builder
 
 on:
   workflow_dispatch:
-    inputs:
-      build_id:
-        description: "Build ID"
-        required: true
-        type: string
 
 permissions:
-  actions: read
   contents: read
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show build request
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build Tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Check project
         run: |
-          echo "Saiko APK Builder workflow started."
-          echo "Build ID: ${{ inputs.build_id }}"
-          echo "Android APK build system is not configured yet."
+          echo "Checking for Android project..."
+          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+            echo "Android project not found."
+            echo "A WebView Android template must be created first."
+            exit 1
+          fi
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saiko-APK
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
