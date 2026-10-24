@@ -1,0 +1,11 @@
+name: Workflow Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test workflow
+        run: echo "Saiko APK Builder workflow is working"
