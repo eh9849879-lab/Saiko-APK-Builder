@@ -4,6 +4,19 @@ const crypto = require("crypto");
 
 const app = express();
 
+// ✅ CORS FIX (Browser se connect hone ke liye zaroori hai)
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.use(express.json());
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -33,7 +46,8 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/build", upload.single("project"), async (req, res) => {
+// ✅ upload.single("project") ki jagah upload.any() kiya taaki frontend se koi bhi field aaye, error na de
+app.post("/build", upload.any(), async (req, res) => {
   try {
     if (!TOKEN) {
       return res.status(500).json({
@@ -41,7 +55,9 @@ app.post("/build", upload.single("project"), async (req, res) => {
       });
     }
 
-    if (!req.file) {
+    // ✅ File nikalne ka safe tarika
+    const file = req.files && req.files[0];
+    if (!file) {
       return res.status(400).json({
         error: "ZIP file missing."
       });
@@ -49,7 +65,9 @@ app.post("/build", upload.single("project"), async (req, res) => {
 
     const appName = String(req.body.appName || "").trim();
     const packageName = String(req.body.packageName || "").trim();
-    const version = String(req.body.version || "1.0.0").trim();
+    
+    // ✅ versionName fallback add kiya
+    const version = String(req.body.version || req.body.versionName || "1.0.0").trim();
     const versionCode = String(req.body.versionCode || "1").trim();
 
     if (!appName || !/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/.test(packageName)) {
@@ -115,7 +133,7 @@ app.post("/build", upload.single("project"), async (req, res) => {
           "Content-Type": "application/zip",
           "X-GitHub-Api-Version": "2022-11-28"
         },
-        body: req.file.buffer
+        body: file.buffer
       }
     );
 
@@ -135,7 +153,7 @@ app.post("/build", upload.single("project"), async (req, res) => {
             tag_name: tag,
             app_name: appName,
             package_name: packageName,
-            version,
+            version: version,
             version_code: versionCode
           }
         })
