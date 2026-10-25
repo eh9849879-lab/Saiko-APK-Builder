@@ -1,4 +1,5 @@
 name: Build Website APK
+run-name: Build ${{ inputs.tag_name }} # ✅ Ye line nayi hai
 
 on:
   workflow_dispatch:
@@ -58,15 +59,18 @@ jobs:
           INDEX_PATH=$(find temp_extract -name "index.html" | head -n 1)
           
           if [ -z "$INDEX_PATH" ]; then
-            echo "❌ ERROR: ZIP mein kahin bhi index.html nahi mila!"
+            echo "❌ ERROR: ZIP mein index.html nahi mila!"
             exit 1
           fi
           
           ROOT_DIR=$(dirname "$INDEX_PATH")
           cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/www/
-          echo "✅ Website assets ready"
+          
+          ICON_PATH=$(find android-template/app/src/main/assets/www -name "icon.png" | head -n 1)
+          if [ ! -z "$ICON_PATH" ]; then
+            find android-template/app/src/main/res -name "ic_launcher.png" -exec cp "$ICON_PATH" {} \;
+          fi
 
-      # ✅ SMART INJECTION: Direct purane naam aur package ko replace karega
       - name: Inject app settings
         run: |
           cd android-template
@@ -74,39 +78,22 @@ jobs:
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           APP_NAME="${{ github.event.inputs.app_name }}"
           
-          # 1. Update build.gradle (Package & Version)
           sed -i "s/namespace .*/namespace '$PKG'/" app/build.gradle
           sed -i "s/applicationId .*/applicationId \"$PKG\"/" app/build.gradle
           sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
           sed -i "s/versionName .*/versionName \"${{ github.event.inputs.version }}\"/" app/build.gradle
           
-          # 2. Update App Name in Manifest and strings.xml
           sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
           if [ -f app/src/main/res/values/strings.xml ]; then
             sed -i "s|<string name=\"app_name\">.*<\/string>|<string name=\"app_name\">$APP_NAME<\/string>|g" app/src/main/res/values/strings.xml
           fi
           
-          # 3. Update Java Package Path (Taaki app crash na ho)
           mkdir -p app/src/main/java/$PKG_PATH
           if [ -d "app/src/main/java/com/saiko/webapp" ]; then
             cp -r app/src/main/java/com/saiko/webapp/* app/src/main/java/$PKG_PATH/
             rm -rf app/src/main/java/com/saiko/webapp
           fi
           find app/src/main/java -name "*.java" -exec sed -i "s/^package .*/package $PKG;/g" {} +
-          
-          echo "✅ App Settings Injected Perfectly!"
-
-      # ✅ CUSTOM ICON MAGIC: Agar user ne ZIP mein icon.png diya hai
-      - name: Update App Icon
-        run: |
-          ICON_PATH=$(find android-template/app/src/main/assets/www -name "icon.png" | head -n 1)
-          if [ ! -z "$ICON_PATH" ]; then
-            echo "✅ Custom icon.png mil gaya! Replace kar rahe hain..."
-            # Saare mipmap folders ke default icon ko naye icon se replace karo
-            find android-template/app/src/main/res -name "ic_launcher.png" -exec cp "$ICON_PATH" {} \;
-          else
-            echo "ℹ️ ZIP mein icon.png nahi mila. Default icon use hoga."
-          fi
 
       - name: Build APK
         run: |
