@@ -7,6 +7,7 @@ on:
       - 'app/**'
       - 'build.gradle'
       - 'settings.gradle'
+      - 'gradle.properties'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -30,10 +32,17 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Accept Android SDK Licenses
-        run: yes | sdkmanager --licenses
+        shell: bash
+        run: |
+          set +o pipefail
+          yes | sdkmanager --licenses
+          true
 
       - name: Install Android SDK Components
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
