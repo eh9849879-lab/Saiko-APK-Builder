@@ -18,6 +18,10 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -28,16 +32,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK Command Line Tools
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: 'latest'
+          packages: ''
 
       - name: Accept Android SDK Licenses
+        shell: bash
         run: |
-          yes | sdkmanager --licenses || true
+          set +o pipefail
+          yes | sdkmanager --licenses
+          true
 
-      - name: Install Android SDK Components
+      - name: Install Required Android SDK
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
