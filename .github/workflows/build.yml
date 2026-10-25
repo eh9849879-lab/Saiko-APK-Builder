@@ -49,9 +49,10 @@ jobs:
         run: |
           gh release download "${{ github.event.inputs.tag_name }}" --pattern "website.zip" --repo "${{ github.repository }}"
 
+      # ✅ Yahan humne 'www' folder banaya hai
       - name: Extract ZIP safely
         run: |
-          mkdir -p android-template/app/src/main/assets
+          mkdir -p android-template/app/src/main/assets/www
           mkdir -p temp_extract
           unzip -o website.zip -d temp_extract
           
@@ -63,8 +64,9 @@ jobs:
           fi
           
           ROOT_DIR=$(dirname "$INDEX_PATH")
-          cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/
-          echo "✅ Website assets ready (Folder structure fixed)"
+          # ✅ Ab copy 'www' folder ke andar kar rahe hain
+          cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/www/
+          echo "✅ Website assets ready inside www folder"
 
       - name: Inject app settings
         run: |
@@ -80,12 +82,10 @@ jobs:
           cd android-template
           gradle assembleDebug
 
-      # ✅ APK ka naam change karo upload se pehle (Backend ko isi naam ki talash thi)
       - name: Rename APK
         run: |
           mv android-template/app/build/outputs/apk/debug/app-debug.apk android-template/app/build/outputs/apk/debug/Saiko-APK-${{ github.event.inputs.tag_name }}.apk
 
-      # ✅ Exact naam ke sath upload karo
       - name: Upload APK to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
