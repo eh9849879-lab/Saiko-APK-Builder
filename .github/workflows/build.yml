@@ -16,6 +16,10 @@ on:
       version_code:
         required: true
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,29 +27,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1. JDK 17 setup (Android build ke liye zaroori)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 2. Android SDK setup
+      # ✅ Yahan fix kiya hai: v3 se v4 kiya aur packages specify kiye
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
-      # 3. Gradle wrapper check aur permission fix
-      - name: Ensure Gradle wrapper exists and is executable
+      - name: Grant execute permission for gradlew
         run: |
           cd android-template
           if [ ! -f "gradlew" ]; then
-            echo "❌ ERROR: android-template/gradlew file nahi mili! GitHub par check karo ki ye file exist karti hai ya nahi."
+            echo "❌ ERROR: android-template/gradlew file nahi mili!"
             exit 1
           fi
           chmod +x ./gradlew
           echo "✅ gradlew ready"
 
-      # 4. Download ZIP from release
       - name: Download website ZIP
         uses: robinraju/release-downloader@v1.8
         with:
@@ -54,7 +57,6 @@ jobs:
           fileName: "website.zip"
           out-file-path: "."
 
-      # 5. Extract ZIP safely
       - name: Extract ZIP
         run: |
           mkdir -p android-template/app/src/main/assets
@@ -65,7 +67,6 @@ jobs:
           fi
           echo "✅ Website assets ready"
 
-      # 6. Inject app settings
       - name: Inject app settings
         run: |
           cd android-template
@@ -75,13 +76,11 @@ jobs:
           sed -i "s/__VERSION_CODE__/${{ github.event.inputs.version_code }}/g" app/build.gradle
           echo "✅ Settings injected"
 
-      # 7. Build APK
       - name: Build APK
         run: |
           cd android-template
           ./gradlew assembleDebug
 
-      # 8. Upload APK to release
       - name: Upload APK to release
         uses: actions/upload-release-asset@v1
         env:
