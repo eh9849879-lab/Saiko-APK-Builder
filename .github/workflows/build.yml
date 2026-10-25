@@ -33,22 +33,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ✅ Yahan fix hai: packages ko khali string kar diya
-      # taaki tools install na ho, sirf platform-tools rahe
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4.0.4
         with:
           packages: ''
 
-      - name: Grant execute permission for gradlew
-        run: |
-          cd android-template
-          if [ ! -f "gradlew" ]; then
-            echo "❌ ERROR: android-template/gradlew file nahi mili!"
-            exit 1
-          fi
-          chmod +x ./gradlew
-          echo "✅ gradlew ready"
+      # ✅ Naya step: GitHub khud Gradle install karega
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5' 
 
       - name: Download website ZIP
         uses: robinraju/release-downloader@v1.8
@@ -80,7 +74,8 @@ jobs:
       - name: Build APK
         run: |
           cd android-template
-          ./gradlew assembleDebug
+          # ✅ yahan ./gradlew ki jagah direct 'gradle' use kiya hai
+          gradle assembleDebug
 
       - name: Upload APK to release
         uses: actions/upload-release-asset@v1
