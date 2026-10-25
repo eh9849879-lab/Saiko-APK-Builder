@@ -16,6 +16,9 @@ on:
         required: true
       version_code:
         required: true
+      permissions:
+        required: false
+        default: 'INTERNET'
 
 permissions:
   contents: write
@@ -70,11 +73,11 @@ jobs:
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           APP_NAME="${{ github.event.inputs.app_name }}"
+          PERMS="${{ github.event.inputs.permissions }}"
           
           mkdir -p android-template/app/src/main/res/values
           mkdir -p android-template/app/src/main/java/$PKG_PATH
           
-          # 1. Theme (AppCompat ke bina)
           cat << 'EOF' > android-template/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -82,7 +85,6 @@ jobs:
           </resources>
           EOF
 
-          # 2. Strings (App Name set karne ke liye)
           cat << EOF > android-template/app/src/main/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -90,27 +92,25 @@ jobs:
           </resources>
           EOF
 
-          # 3. Dummy Icon
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android-template/app/src/main/res/mipmap-$density
               echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android-template/app/src/main/res/mipmap-$density/ic_launcher.png
           done
 
-          # 4. Manifest
+          # ✅ DYNAMIC PERMISSIONS INJECTOR
           cat << 'EOF' > android-template/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
+          EOF
+          
+          # Har permission ke liye line add karo
+          IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
+          for PERM in "${PERM_ARRAY[@]}"; do
+            echo "    <uses-permission android:name=\"android.permission.$PERM\" />" >> android-template/app/src/main/AndroidManifest.xml
+          done
+          
+          # Baaki ka manifest code
+          cat << 'EOF' >> android-template/app/src/main/AndroidManifest.xml
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -132,7 +132,6 @@ jobs:
           </manifest>
           EOF
 
-          # 5. MainActivity.java (Purani java files delete karke nayi banayenge)
           find android-template/app/src/main/java -name "*.java" -delete
           cat << EOF > android-template/app/src/main/java/$PKG_PATH/MainActivity.java
           package $PKG;
@@ -171,6 +170,7 @@ jobs:
           sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
           sed -i "s/versionName .*/versionName \"${{ github.event.inputs.version }}\"/" app/build.gradle
           
+          # Icon Replace
           ICON_PATH=$(find app/src/main/assets/www -name "icon.png" | head -n 1)
           if [ ! -z "$ICON_PATH" ]; then
             find app/src/main/res -name "ic_launcher.png" -exec cp "$ICON_PATH" {} \;
