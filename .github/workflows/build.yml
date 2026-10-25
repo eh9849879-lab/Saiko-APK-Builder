@@ -14,15 +14,15 @@ permissions:
 
 jobs:
   build:
-    name: Build Uploaded Android Project
+    name: Build Saiko APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Builder Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
@@ -34,9 +34,14 @@ jobs:
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Check Build Request
+      - name: Check Build Environment
         run: |
-          echo "Build request ID: ${{ inputs.run_id }}"
-          echo "ERROR: Uploaded ZIP transfer is not connected yet."
-          echo "The backend must securely transfer and extract the uploaded project."
-          exit 1
+          java -version
+          sdkmanager --list_installed
+          echo "Build request: ${{ inputs.run_id }}"
+
+      - name: Explain Next Step
+        run: |
+          echo "Build environment is ready."
+          echo "Next, the uploaded website ZIP must be transferred here."
+          echo "Then the workflow can package it into an Android WebView APK."
