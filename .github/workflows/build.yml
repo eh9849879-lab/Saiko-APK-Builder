@@ -97,19 +97,16 @@ jobs:
               echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android-template/app/src/main/res/mipmap-$density/ic_launcher.png
           done
 
-          # ✅ DYNAMIC PERMISSIONS INJECTOR
           cat << 'EOF' > android-template/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
           EOF
           
-          # Har permission ke liye line add karo
           IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
           for PERM in "${PERM_ARRAY[@]}"; do
             echo "    <uses-permission android:name=\"android.permission.$PERM\" />" >> android-template/app/src/main/AndroidManifest.xml
           done
           
-          # Baaki ka manifest code
           cat << 'EOF' >> android-template/app/src/main/AndroidManifest.xml
               <application
                   android:allowBackup="true"
@@ -132,30 +129,86 @@ jobs:
           </manifest>
           EOF
 
+          # ✅ NAYA MAINACTIVITY (File Upload/Chooser support ke sath)
           find android-template/app/src/main/java -name "*.java" -delete
           cat << EOF > android-template/app/src/main/java/$PKG_PATH/MainActivity.java
           package $PKG;
 
           import android.app.Activity;
+          import android.content.Intent;
+          import android.net.Uri;
           import android.os.Bundle;
-          import android.webkit.WebView;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
+          import android.webkit.WebView;
           import android.webkit.WebViewClient;
 
           public class MainActivity extends Activity {
+              private WebView webView;
+              private ValueCallback<Uri[]> filePathCallback;
+              private static final int FILECHOOSER_RESULTCODE = 1001;
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
+                  webView = new WebView(this);
                   setContentView(webView);
+
                   WebSettings settings = webView.getSettings();
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setAllowFileAccess(true);
                   settings.setAllowContentAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
                   webView.setWebViewClient(new WebViewClient());
+
+                  // ✅ Ye part image/video upload ke liye zaroori hai
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                          if (MainActivity.this.filePathCallback != null) {
+                              MainActivity.this.filePathCallback.onReceiveValue(null);
+                          }
+                          MainActivity.this.filePathCallback = filePathCallback;
+
+                          Intent intent = fileChooserParams.createIntent();
+                          try {
+                              startActivityForResult(intent, FILECHOOSER_RESULTCODE);
+                          } catch (Exception e) {
+                              MainActivity.this.filePathCallback = null;
+                              return false;
+                          }
+                          return true;
+                      }
+
+                      // Camera/Mic permission handle karne ke liye
+                      @Override
+                      public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                          runOnUiThread(new Runnable() {
+                              @Override
+                              public void run() {
+                                  request.grant(request.getResources());
+                              }
+                          });
+                      }
+                  });
+
                   webView.loadUrl("file:///android_asset/www/index.html");
+              }
+
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+                  if (requestCode == FILECHOOSER_RESULTCODE) {
+                      if (filePathCallback != null) {
+                          filePathCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, intent));
+                          filePathCallback = null;
+                      }
+                  } else {
+                      super.onActivityResult(requestCode, resultCode, intent);
+                  }
               }
           }
           EOF
@@ -170,7 +223,6 @@ jobs:
           sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
           sed -i "s/versionName .*/versionName \"${{ github.event.inputs.version }}\"/" app/build.gradle
           
-          # Icon Replace
           ICON_PATH=$(find app/src/main/assets/www -name "icon.png" | head -n 1)
           if [ ! -z "$ICON_PATH" ]; then
             find app/src/main/res -name "ic_launcher.png" -exec cp "$ICON_PATH" {} \;
