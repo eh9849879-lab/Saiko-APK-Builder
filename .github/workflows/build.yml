@@ -33,11 +33,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ✅ Yahan fix kiya hai: v3 se v4 kiya aur packages specify kiye
+      # ✅ Yahan fix hai: packages ko khali string kar diya
+      # taaki tools install na ho, sirf platform-tools rahe
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v4.0.4
         with:
-          packages: 'platform-tools'
+          packages: ''
 
       - name: Grant execute permission for gradlew
         run: |
