@@ -38,19 +38,17 @@ jobs:
         with:
           packages: ''
 
-      # ✅ Naya step: GitHub khud Gradle install karega
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5' 
 
-      - name: Download website ZIP
-        uses: robinraju/release-downloader@v1.8
-        with:
-          repository: ${{ github.repository }}
-          tag: ${{ github.event.inputs.tag_name }}
-          fileName: "website.zip"
-          out-file-path: "."
+      # ✅ Yahan GitHub CLI use kiya hai jo 100% reliable hai
+      - name: Download website ZIP using GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ github.event.inputs.tag_name }}" --pattern "website.zip" --repo "${{ github.repository }}"
 
       - name: Extract ZIP
         run: |
@@ -74,7 +72,6 @@ jobs:
       - name: Build APK
         run: |
           cd android-template
-          # ✅ yahan ./gradlew ki jagah direct 'gradle' use kiya hai
           gradle assembleDebug
 
       - name: Upload APK to release
