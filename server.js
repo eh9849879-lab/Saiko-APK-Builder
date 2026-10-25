@@ -4,7 +4,7 @@ const crypto = require("crypto");
 
 const app = express();
 
-// ✅ CORS FIX (Browser se connect hone ke liye zaroori hai)
+// ✅ CORS FIX
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -35,19 +35,19 @@ const OWNER = "eh9849879-lab";
 const REPO = "Saiko-APK-Builder";
 const TOKEN = process.env.SAIKO_BUILDER_TOKEN;
 
-app.get("/", (req, res) => {
+// ✅ Dono routes add kiye taaki 404 na aaye
+app.get(["/", "/api", "/api/"], (req, res) => {
   res.json({
     app: "Saiko APK Builder Backend",
     status: "running"
   });
 });
 
-app.get("/health", (req, res) => {
+app.get(["/health", "/api/health"], (req, res) => {
   res.json({ ok: true });
 });
 
-// ✅ upload.single("project") ki jagah upload.any() kiya taaki frontend se koi bhi field aaye, error na de
-app.post("/build", upload.any(), async (req, res) => {
+app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
   try {
     if (!TOKEN) {
       return res.status(500).json({
@@ -55,7 +55,6 @@ app.post("/build", upload.any(), async (req, res) => {
       });
     }
 
-    // ✅ File nikalne ka safe tarika
     const file = req.files && req.files[0];
     if (!file) {
       return res.status(400).json({
@@ -65,8 +64,6 @@ app.post("/build", upload.any(), async (req, res) => {
 
     const appName = String(req.body.appName || "").trim();
     const packageName = String(req.body.packageName || "").trim();
-    
-    // ✅ versionName fallback add kiya
     const version = String(req.body.version || req.body.versionName || "1.0.0").trim();
     const versionCode = String(req.body.versionCode || "1").trim();
 
@@ -167,14 +164,13 @@ app.post("/build", upload.any(), async (req, res) => {
     });
   } catch (error) {
     console.error("BUILD ERROR:", error.message);
-
     res.status(500).json({
       error: error.message || "Build request failed."
     });
   }
 });
 
-app.get("/status/:id", async (req, res) => {
+app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
   try {
     if (!TOKEN) {
       return res.status(500).json({ error: "Token missing." });
@@ -219,7 +215,7 @@ app.get("/status/:id", async (req, res) => {
   }
 });
 
-app.get("/download/:id", async (req, res) => {
+app.get(["/download/:id", "/api/download/:id"], async (req, res) => {
   try {
     if (!TOKEN) {
       return res.status(500).send("Token missing.");
