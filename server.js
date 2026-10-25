@@ -1,133 +1,111 @@
 const express = require("express");
 const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 
 const app = express();
 
 const upload = multer({
-  dest: "/tmp/saiko-uploads/",
-  limits: { fileSize: 50 * 1024 * 1024 }
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 3 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.originalname.toLowerCase().endsWith(".zip")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Sirf ZIP file upload karo."));
+    }
+  }
 });
 
 const OWNER = "eh9849879-lab";
 const REPO = "Saiko-APK-Builder";
-const WORKFLOW = "build.yml";
 const TOKEN = process.env.SAIKO_BUILDER_TOKEN;
 
-const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
-
-async function github(endpoint, options = {}) {
-  if (!TOKEN) {
-    throw new Error("SAIKO_BUILDER_TOKEN environment variable missing.");
-  }
-
-  const response = await fetch(API + endpoint, {
-    ...options,
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${TOKEN}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(options.headers || {})
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `GitHub API ${response.status}: ${await response.text()}`
-    );
-  }
-
-  return response;
-}
-
-function validBuildId(id) {
-  return /^[0-9a-f-]{36}$/i.test(id);
-}
-
-function buildTag(id) {
-  return "saiko-" + id;
-}
-
 app.get("/", (req, res) => {
-  res.send("Saiko APK Builder backend is running.");
+  res.json({
+    app: "Saiko APK Builder Backend",
+    status: "running"
+  });
 });
 
 app.get("/health", (req, res) => {
-  res.json({
-    status: "online",
-    builder: "Saiko APK Builder"
-  });
+  res.json({ ok: true });
 });
 
 app.post("/build", upload.single("project"), async (req, res) => {
-  const zipPath = req.file?.path;
-  let releaseId;
-
   try {
+    if (!TOKEN) {
+      return res.status(500).json({
+        error: "SAIKO_BUILDER_TOKEN environment variable missing."
+      });
+    }
+
     if (!req.file) {
       return res.status(400).json({
-        message: "Project ZIP upload karo."
+        error: "ZIP file missing."
       });
     }
 
-    if (path.extname(req.file.originalname).toLowerCase() !== ".zip") {
-      return res.status(400).json({
-        message: "Sirf ZIP file supported hai."
-      });
-    }
-
-    const name = String(req.body.appName || "").trim();
-    const pkg = String(req.body.packageName || "").trim();
+    const appName = String(req.body.appName || "").trim();
+    const packageName = String(req.body.packageName || "").trim();
     const version = String(req.body.version || "1.0.0").trim();
     const versionCode = String(req.body.versionCode || "1").trim();
 
-    if (!name || name.length > 40) {
+    if (!appName || !/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/.test(packageName)) {
       return res.status(400).json({
-        message: "App name 1–40 characters ka hona chahiye."
+        error: "App name ya package name invalid hai."
       });
     }
 
-    if (!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg)) {
+    if (!/^\d+$/.test(versionCode)) {
       return res.status(400).json({
-        message: "Package name invalid hai."
+        error: "Version code number hona chahiye."
       });
     }
 
-    if (!/^[A-Za-z0-9._+-]{1,20}$/.test(version)) {
-      return res.status(400).json({
-        message: "Version name invalid hai."
-      });
+    const tag = "saiko-" + crypto.randomUUID();
+
+    async function github(path, options = {}) {
+      const response = await fetch(
+        "https://api.github.com" + path,
+        {
+          ...options,
+          headers: {
+            Authorization: `Bearer ${TOKEN}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            ...(options.headers || {})
+          }
+        }
+      );
+
+      const text = await response.text();
+
+      if (!response.ok) {
+        throw new Error(`GitHub API ${response.status}: ${text.slice(0, 400)}`);
+      }
+
+      return text ? JSON.parse(text) : {};
     }
 
-    if (!/^[1-9]\d*$/.test(versionCode)) {
-      return res.status(400).json({
-        message: "Version code invalid hai."
-      });
-    }
-
-    const buildId = crypto.randomUUID();
-    const tagName = buildTag(buildId);
-
-    const releaseResponse = await github("/releases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tag_name: tagName,
-        name: `Saiko Build ${buildId}`,
-        draft: true,
-        prerelease: true
-      })
-    });
-
-    const release = await releaseResponse.json();
-    releaseId = release.id;
+    const release = await github(
+      `/repos/${OWNER}/${REPO}/releases`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tag_name: tag,
+          name: `Saiko Build ${tag}`,
+          draft: true,
+          prerelease: true
+        })
+      }
+    );
 
     const uploadUrl = release.upload_url.split("{")[0];
-    const zipBuffer = await fs.promises.readFile(zipPath);
 
-    const assetResponse = await fetch(
+    const uploaded = await fetch(
       `${uploadUrl}?name=website.zip`,
       {
         method: "POST",
@@ -137,137 +115,125 @@ app.post("/build", upload.single("project"), async (req, res) => {
           "Content-Type": "application/zip",
           "X-GitHub-Api-Version": "2022-11-28"
         },
-        body: zipBuffer
+        body: req.file.buffer
       }
     );
 
-    if (!assetResponse.ok) {
-      throw new Error(
-        `ZIP upload failed: ${assetResponse.status} ${await assetResponse.text()}`
-      );
+    if (!uploaded.ok) {
+      throw new Error("ZIP ko GitHub Release par upload nahi kar paye.");
     }
 
-    await github(`/actions/workflows/${WORKFLOW}/dispatches`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ref: "main",
-        inputs: {
-          run_id: buildId,
-          tag_name: tagName,
-          app_name: name,
-          package_name: pkg,
-          version,
-          version_code: versionCode
-        }
-      })
-    });
+    await github(
+      `/repos/${OWNER}/${REPO}/actions/workflows/build.yml/dispatches`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            run_id: tag,
+            tag_name: tag,
+            app_name: appName,
+            package_name: packageName,
+            version,
+            version_code: versionCode
+          }
+        })
+      }
+    );
 
-    res.status(202).json({
-      buildId,
+    res.json({
+      buildId: tag,
       status: "queued",
-      message: "Build request bhej di gayi. APK tayyar hone ka intezar karein."
+      message: "Build request GitHub Actions ko bhej di gayi hai."
     });
   } catch (error) {
-    console.error("Build error:", error.message);
+    console.error("BUILD ERROR:", error.message);
 
     res.status(500).json({
-      message: "Build request fail hui.",
-      error: error.message
+      error: error.message || "Build request failed."
     });
-  } finally {
-    if (zipPath) {
-      fs.promises.unlink(zipPath).catch(() => {});
-    }
   }
 });
 
 app.get("/status/:id", async (req, res) => {
   try {
-    const id = req.params.id;
-
-    if (!validBuildId(id)) {
-      return res.status(400).json({ message: "Invalid build ID." });
+    if (!TOKEN) {
+      return res.status(500).json({ error: "Token missing." });
     }
 
-    const tag = buildTag(id);
+    const tag = req.params.id;
 
-    const releaseResponse = await github(
-      `/releases/tags/${encodeURIComponent(tag)}`
+    const response = await fetch(
+      `https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${encodeURIComponent(tag)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28"
+        }
+      }
     );
 
-    const release = await releaseResponse.json();
+    if (response.status === 404) {
+      return res.json({ status: "queued" });
+    }
+
+    if (!response.ok) {
+      throw new Error("GitHub release status check failed.");
+    }
+
+    const release = await response.json();
     const apk = (release.assets || []).find(
-      asset => asset.name === `Saiko-APK-${id}.apk`
+      asset => asset.name === `Saiko-APK-${tag}.apk`
     );
 
     if (apk) {
       return res.json({
-        buildId: id,
         status: "completed",
-        message: "APK ready hai.",
-        downloadUrl: `/download/${id}`
+        downloadUrl: `/download/${encodeURIComponent(tag)}`
       });
     }
 
-    const runsResponse = await github(
-      `/actions/workflows/${WORKFLOW}/runs?event=workflow_dispatch&per_page=20`
-    );
-
-    const runsData = await runsResponse.json();
-    const matchingRun = (runsData.workflow_runs || []).find(
-      run => run.display_title?.includes(id)
-    );
-
-    if (matchingRun?.status === "completed" && matchingRun.conclusion !== "success") {
-      return res.json({
-        buildId: id,
-        status: "failed",
-        message: "Build fail ho gaya. GitHub Actions logs check karo."
-      });
-    }
-
-    return res.json({
-      buildId: id,
-      status: matchingRun?.status || "queued",
-      message: "APK abhi build ho raha hai."
-    });
+    res.json({ status: "building" });
   } catch (error) {
-    if (error.message.includes("GitHub API 404")) {
-      return res.json({
-        status: "queued",
-        message: "Build request process ho rahi hai."
-      });
-    }
-
-    console.error("Status error:", error.message);
-    res.status(500).json({ message: "Status check fail hui." });
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.get("/download/:id", async (req, res) => {
   try {
-    const id = req.params.id;
-
-    if (!validBuildId(id)) {
-      return res.status(400).send("Invalid build ID.");
+    if (!TOKEN) {
+      return res.status(500).send("Token missing.");
     }
 
-    const tag = buildTag(id);
-    const releaseResponse = await github(
-      `/releases/tags/${encodeURIComponent(tag)}`
+    const tag = req.params.id;
+
+    const response = await fetch(
+      `https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${encodeURIComponent(tag)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28"
+        }
+      }
     );
 
-    const release = await releaseResponse.json();
-    const asset = (release.assets || []).find(
-      item => item.name === `Saiko-APK-${id}.apk`
+    if (!response.ok) {
+      return res.status(404).send("Build release nahi mila.");
+    }
+
+    const release = await response.json();
+    const apk = (release.assets || []).find(
+      asset => asset.name === `Saiko-APK-${tag}.apk`
     );
 
-    if (!asset) {
+    if (!apk) {
       return res.status(404).send("APK abhi ready nahi hai.");
     }
 
-    const downloadResponse = await fetch(asset.url, {
+    const apkResponse = await fetch(apk.url, {
       headers: {
         Authorization: `Bearer ${TOKEN}`,
         Accept: "application/octet-stream",
@@ -275,31 +241,27 @@ app.get("/download/:id", async (req, res) => {
       }
     });
 
-    if (!downloadResponse.ok || !downloadResponse.body) {
-      return res.status(502).send("APK download nahi ho paya.");
+    if (!apkResponse.ok) {
+      throw new Error("APK download nahi ho paya.");
     }
 
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.android.package-archive"
-    );
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="Saiko-APK-${id}.apk"`
+      `attachment; filename="${apk.name}"`
     );
 
-    const { Readable } = require("stream");
-    Readable.fromWeb(downloadResponse.body).pipe(res);
+    const buffer = Buffer.from(await apkResponse.arrayBuffer());
+    res.send(buffer);
   } catch (error) {
-    console.error("Download error:", error.message);
-    if (!res.headersSent) {
-      res.status(500).send("APK download fail hua.");
-    }
+    res.status(500).send(error.message);
   }
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Saiko APK Builder running on port ${PORT}`);
+app.use((error, req, res, next) => {
+  res.status(400).json({
+    error: error.message || "Request invalid hai."
+  });
 });
+
+module.exports = app;
