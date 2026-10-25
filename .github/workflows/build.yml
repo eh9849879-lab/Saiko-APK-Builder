@@ -1,5 +1,5 @@
 name: Build Website APK
-run-name: Build ${{ inputs.tag_name }} # ✅ Ye line nayi hai
+run-name: Build ${{ inputs.tag_name }}
 
 on:
   workflow_dispatch:
@@ -57,7 +57,6 @@ jobs:
           unzip -o website.zip -d temp_extract
           
           INDEX_PATH=$(find temp_extract -name "index.html" | head -n 1)
-          
           if [ -z "$INDEX_PATH" ]; then
             echo "❌ ERROR: ZIP mein index.html nahi mila!"
             exit 1
@@ -65,35 +64,100 @@ jobs:
           
           ROOT_DIR=$(dirname "$INDEX_PATH")
           cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/www/
-          
-          ICON_PATH=$(find android-template/app/src/main/assets/www -name "icon.png" | head -n 1)
-          if [ ! -z "$ICON_PATH" ]; then
-            find android-template/app/src/main/res -name "ic_launcher.png" -exec cp "$ICON_PATH" {} \;
-          fi
 
-      - name: Inject app settings
+      # ✅ MAGIC STEP: Missing Android resources ko yahan create kar rahe hain
+      - name: Create Missing Android Resources
+        run: |
+          mkdir -p android-template/app/src/main/res/values
+          
+          # 1. Theme Style create karo
+          cat << 'EOF' > android-template/app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
+          </resources>
+          EOF
+
+          # 2. Strings file create karo
+          cat << 'EOF' > android-template/app/src/main/res/values/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">MyApp</string>
+          </resources>
+          EOF
+
+          # 3. Dummy Icon create karo (Agar user ka icon nahi hai to)
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android-template/app/src/main/res/mipmap-$density
+              echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android-template/app/src/main/res/mipmap-$density/ic_launcher.png
+          done
+
+          # 4. Manifest file ko fix karo
+          cat << 'EOF' > android-template/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:usesCleartextTraffic="true"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden"
+                      android:hardwareAccelerated="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Inject App Details & Custom Icon
         run: |
           cd android-template
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           APP_NAME="${{ github.event.inputs.app_name }}"
           
+          # Package & Version update
           sed -i "s/namespace .*/namespace '$PKG'/" app/build.gradle
           sed -i "s/applicationId .*/applicationId \"$PKG\"/" app/build.gradle
           sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
           sed -i "s/versionName .*/versionName \"${{ github.event.inputs.version }}\"/" app/build.gradle
           
-          sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
-          if [ -f app/src/main/res/values/strings.xml ]; then
-            sed -i "s|<string name=\"app_name\">.*<\/string>|<string name=\"app_name\">$APP_NAME<\/string>|g" app/src/main/res/values/strings.xml
-          fi
+          # App Name update
+          sed -i "s|<string name=\"app_name\">.*<\/string>|<string name=\"app_name\">$APP_NAME<\/string>|g" app/src/main/res/values/strings.xml
           
+          # Java folder path update
           mkdir -p app/src/main/java/$PKG_PATH
           if [ -d "app/src/main/java/com/saiko/webapp" ]; then
             cp -r app/src/main/java/com/saiko/webapp/* app/src/main/java/$PKG_PATH/
             rm -rf app/src/main/java/com/saiko/webapp
           fi
           find app/src/main/java -name "*.java" -exec sed -i "s/^package .*/package $PKG;/g" {} +
+
+          # Agar ZIP mein icon.png diya hai to use replace karo
+          ICON_PATH=$(find app/src/main/assets/www -name "icon.png" | head -n 1)
+          if [ ! -z "$ICON_PATH" ]; then
+            find app/src/main/res -name "ic_launcher.png" -exec cp "$ICON_PATH" {} \;
+            echo "✅ Custom Icon lag gaya!"
+          fi
 
       - name: Build APK
         run: |
