@@ -2,6 +2,12 @@ name: Saiko APK Builder
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - '.github/workflows/build.yml'
 
 permissions:
   contents: read
