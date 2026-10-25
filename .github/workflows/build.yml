@@ -43,22 +43,33 @@ jobs:
         with:
           gradle-version: '8.5' 
 
-      # ✅ Yahan GitHub CLI use kiya hai jo 100% reliable hai
       - name: Download website ZIP using GitHub CLI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download "${{ github.event.inputs.tag_name }}" --pattern "website.zip" --repo "${{ github.repository }}"
 
-      - name: Extract ZIP
+      # ✅ SMART EXTRACT LOGIC: Folder ke andar wali files ko root mein layega
+      - name: Extract ZIP safely
         run: |
           mkdir -p android-template/app/src/main/assets
-          unzip -o website.zip -d android-template/app/src/main/assets
-          if [ ! -f android-template/app/src/main/assets/index.html ]; then
-            echo "❌ ERROR: ZIP ke root mein index.html nahi mila!"
+          mkdir -p temp_extract
+          unzip -o website.zip -d temp_extract
+          
+          # Check karo index.html kahan hai
+          INDEX_PATH=$(find temp_extract -name "index.html" | head -n 1)
+          
+          if [ -z "$INDEX_PATH" ]; then
+            echo "❌ ERROR: ZIP mein kahin bhi index.html nahi mila!"
             exit 1
           fi
-          echo "✅ Website assets ready"
+          
+          # index.html jis folder mein hai, uski location nikaalo
+          ROOT_DIR=$(dirname "$INDEX_PATH")
+          
+          # Us folder ke saare contents ko assets mein copy karo
+          cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/
+          echo "✅ Website assets ready (Folder structure fixed)"
 
       - name: Inject app settings
         run: |
