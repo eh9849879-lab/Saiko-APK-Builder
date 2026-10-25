@@ -65,34 +65,38 @@ jobs:
           ROOT_DIR=$(dirname "$INDEX_PATH")
           cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/www/
 
-      # ✅ MAGIC STEP: Missing Android resources ko yahan create kar rahe hain
       - name: Create Missing Android Resources
         run: |
-          mkdir -p android-template/app/src/main/res/values
+          PKG="${{ github.event.inputs.package_name }}"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          APP_NAME="${{ github.event.inputs.app_name }}"
           
-          # 1. Theme Style create karo
+          mkdir -p android-template/app/src/main/res/values
+          mkdir -p android-template/app/src/main/java/$PKG_PATH
+          
+          # 1. Theme (AppCompat ke bina)
           cat << 'EOF' > android-template/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
+              <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar" />
           </resources>
           EOF
 
-          # 2. Strings file create karo
-          cat << 'EOF' > android-template/app/src/main/res/values/strings.xml
+          # 2. Strings (App Name set karne ke liye)
+          cat << EOF > android-template/app/src/main/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">MyApp</string>
+              <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
 
-          # 3. Dummy Icon create karo (Agar user ka icon nahi hai to)
+          # 3. Dummy Icon
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android-template/app/src/main/res/mipmap-$density
               echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android-template/app/src/main/res/mipmap-$density/ic_launcher.png
           done
 
-          # 4. Manifest file ko fix karo
+          # 4. Manifest
           cat << 'EOF' > android-template/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -128,35 +132,48 @@ jobs:
           </manifest>
           EOF
 
+          # 5. MainActivity.java (Purani java files delete karke nayi banayenge)
+          find android-template/app/src/main/java -name "*.java" -delete
+          cat << EOF > android-template/app/src/main/java/$PKG_PATH/MainActivity.java
+          package $PKG;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebSettings;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  setContentView(webView);
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/www/index.html");
+              }
+          }
+          EOF
+
       - name: Inject App Details & Custom Icon
         run: |
           cd android-template
           PKG="${{ github.event.inputs.package_name }}"
-          PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          APP_NAME="${{ github.event.inputs.app_name }}"
           
-          # Package & Version update
           sed -i "s/namespace .*/namespace '$PKG'/" app/build.gradle
           sed -i "s/applicationId .*/applicationId \"$PKG\"/" app/build.gradle
           sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/" app/build.gradle
           sed -i "s/versionName .*/versionName \"${{ github.event.inputs.version }}\"/" app/build.gradle
           
-          # App Name update
-          sed -i "s|<string name=\"app_name\">.*<\/string>|<string name=\"app_name\">$APP_NAME<\/string>|g" app/src/main/res/values/strings.xml
-          
-          # Java folder path update
-          mkdir -p app/src/main/java/$PKG_PATH
-          if [ -d "app/src/main/java/com/saiko/webapp" ]; then
-            cp -r app/src/main/java/com/saiko/webapp/* app/src/main/java/$PKG_PATH/
-            rm -rf app/src/main/java/com/saiko/webapp
-          fi
-          find app/src/main/java -name "*.java" -exec sed -i "s/^package .*/package $PKG;/g" {} +
-
-          # Agar ZIP mein icon.png diya hai to use replace karo
           ICON_PATH=$(find app/src/main/assets/www -name "icon.png" | head -n 1)
           if [ ! -z "$ICON_PATH" ]; then
             find app/src/main/res -name "ic_launcher.png" -exec cp "$ICON_PATH" {} \;
-            echo "✅ Custom Icon lag gaya!"
           fi
 
       - name: Build APK
