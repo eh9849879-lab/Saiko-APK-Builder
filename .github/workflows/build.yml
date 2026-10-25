@@ -14,14 +14,15 @@ permissions:
 
 jobs:
   build:
-    name: Build Uploaded Project
+    name: Build Uploaded Android Project
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout Builder Repository
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -30,15 +31,12 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Check Build Request
         run: |
-          echo "Build request: ${{ inputs.run_id }}"
-          echo "ZIP download and project extraction are not configured yet."
+          echo "Build request ID: ${{ inputs.run_id }}"
+          echo "ERROR: Uploaded ZIP transfer is not connected yet."
+          echo "The backend must securely transfer and extract the uploaded project."
           exit 1
