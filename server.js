@@ -167,9 +167,12 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
       const run = runs.workflow_runs.find(r => r.display_title && r.display_title.includes(tag));
       
       if (run) {
-        if (run.conclusion === "failure") {
-          return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya. Actions tab mein logs check karo." });
-        }
+        if (run.conclusion === "failure" || run.conclusion === "startup_failure") {
+  return res.json({ 
+    status: "failed", 
+    error: "GitHub Actions build fail ho gaya. Actions tab mein logs check karo (quota ya setup issue ho sakta hai)." 
+  });
+}
         if (run.status === "in_progress" || run.status === "queued") {
           return res.json({ status: "building" });
         }
