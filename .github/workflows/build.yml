@@ -80,11 +80,16 @@ jobs:
           cd android-template
           gradle assembleDebug
 
-      # ✅ Yahan naya upload step hai jo 100% reliable hai
+      # ✅ APK ka naam change karo upload se pehle (Backend ko isi naam ki talash thi)
+      - name: Rename APK
+        run: |
+          mv android-template/app/build/outputs/apk/debug/app-debug.apk android-template/app/build/outputs/apk/debug/Saiko-APK-${{ github.event.inputs.tag_name }}.apk
+
+      # ✅ Exact naam ke sath upload karo
       - name: Upload APK to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.event.inputs.tag_name }}" \
-            android-template/app/build/outputs/apk/debug/app-debug.apk#"Saiko-APK-${{ github.event.inputs.tag_name }}.apk" \
+            android-template/app/build/outputs/apk/debug/Saiko-APK-${{ github.event.inputs.tag_name }}.apk \
             --repo "${{ github.repository }}" --clobber
