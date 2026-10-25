@@ -38,7 +38,6 @@ jobs:
         with:
           packages: ''
 
-      # ✅ Yahan Gradle 8.5 se 8.9 kar diya hai
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -81,12 +80,11 @@ jobs:
           cd android-template
           gradle assembleDebug
 
+      # ✅ Yahan naya upload step hai jo 100% reliable hai
       - name: Upload APK to release
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.repository.releases_url }}/tags/${{ github.event.inputs.tag_name }}
-          asset_path: android-template/app/build/outputs/apk/debug/app-debug.apk
-          asset_name: Saiko-APK-${{ github.event.inputs.tag_name }}.apk
-          asset_content_type: application/vnd.android.package-archive
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.inputs.tag_name }}" \
+            android-template/app/build/outputs/apk/debug/app-debug.apk#"Saiko-APK-${{ github.event.inputs.tag_name }}.apk" \
+            --repo "${{ github.repository }}" --clobber
