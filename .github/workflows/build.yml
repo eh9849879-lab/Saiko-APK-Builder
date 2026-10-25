@@ -38,10 +38,11 @@ jobs:
         with:
           packages: ''
 
+      # ✅ Yahan Gradle 8.5 se 8.9 kar diya hai
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.5' 
+          gradle-version: '8.9' 
 
       - name: Download website ZIP using GitHub CLI
         env:
@@ -49,14 +50,12 @@ jobs:
         run: |
           gh release download "${{ github.event.inputs.tag_name }}" --pattern "website.zip" --repo "${{ github.repository }}"
 
-      # ✅ SMART EXTRACT LOGIC: Folder ke andar wali files ko root mein layega
       - name: Extract ZIP safely
         run: |
           mkdir -p android-template/app/src/main/assets
           mkdir -p temp_extract
           unzip -o website.zip -d temp_extract
           
-          # Check karo index.html kahan hai
           INDEX_PATH=$(find temp_extract -name "index.html" | head -n 1)
           
           if [ -z "$INDEX_PATH" ]; then
@@ -64,10 +63,7 @@ jobs:
             exit 1
           fi
           
-          # index.html jis folder mein hai, uski location nikaalo
           ROOT_DIR=$(dirname "$INDEX_PATH")
-          
-          # Us folder ke saare contents ko assets mein copy karo
           cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/
           echo "✅ Website assets ready (Folder structure fixed)"
 
