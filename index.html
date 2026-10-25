@@ -3,210 +3,482 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080c14">
 <title>Saiko APK Builder</title>
+
 <style>
-:root{--bg:#080c14;--card:#111827;--line:#263449;--green:#36e6a0;--text:#f2f6ff;--muted:#91a0b7}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}
-header{padding:22px 17px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
-.logo{width:43px;height:43px;border-radius:14px;background:var(--green);color:#07120d;display:grid;place-items:center;font-weight:900;font-size:21px}
-header h1{font-size:19px;margin:0}header p{font-size:12px;color:var(--muted);margin:5px 0 0}
-main{max-width:680px;margin:auto;padding:18px 14px 40px}
-.hero{padding:24px 4px}
-.badge{display:inline-block;color:var(--green);border:1px solid #235d49;border-radius:30px;padding:7px 11px;font-size:12px}
-.hero h2{font-size:29px;line-height:1.2;margin:15px 0 10px}
-.hero p{color:var(--muted);font-size:14px;line-height:1.7}
-.card{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:19px;margin-bottom:15px}
-.card h3{font-size:16px;margin:0 0 17px}
-label{display:block;font-size:13px;margin:14px 0 8px;color:#dce5f5}
-input,select{width:100%;padding:13px;background:#0a101b;border:1px solid #304057;border-radius:10px;color:white;font-size:14px;outline:none}
-input:focus,select:focus{border-color:var(--green)}
-input[type=file]{padding:12px;font-size:12px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.upload{border:1px dashed #3c566c;padding:22px 12px;text-align:center;border-radius:13px;background:#0b1420}
-.upload strong{display:block;margin-bottom:8px}
-.upload p{font-size:12px;color:var(--muted);line-height:1.6}
-button{width:100%;padding:14px;border-radius:11px;border:1px solid var(--green);background:transparent;color:var(--green);font-size:14px;font-weight:bold;cursor:pointer;transition:.18s}
-button:active{transform:scale(.98)}
-.primary{background:var(--green);color:#06130c;margin-top:17px}
-.note{font-size:12px;color:var(--muted);line-height:1.7;margin-top:12px}
-.status{display:none;padding:13px;border-radius:10px;background:#0a101b;border:1px solid var(--line);font-size:13px;line-height:1.7;margin-top:15px;overflow-wrap:anywhere}
-.preview{width:60px;height:60px;border-radius:15px;object-fit:cover;display:none;margin-top:10px}
-footer{text-align:center;color:#64748b;font-size:12px;padding:20px}
-@media(max-width:420px){.row{grid-template-columns:1fr}.hero h2{font-size:26px}}
+:root {
+  --bg: #080c14;
+  --card: #111827;
+  --line: #263449;
+  --green: #36e6a0;
+  --text: #f2f6ff;
+  --muted: #91a0b7;
+  --danger: #ff7272;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+}
+header {
+  padding: 22px 17px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo {
+  width: 43px;
+  height: 43px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: var(--green);
+  color: #07120d;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 21px;
+}
+header h1 { font-size: 19px; margin: 0; }
+header p { font-size: 12px; color: var(--muted); margin: 5px 0 0; }
+
+main {
+  max-width: 680px;
+  margin: auto;
+  padding: 18px 14px 40px;
+}
+.hero { padding: 24px 4px; }
+.badge {
+  display: inline-block;
+  color: var(--green);
+  border: 1px solid #235d49;
+  border-radius: 30px;
+  padding: 7px 11px;
+  font-size: 12px;
+}
+.hero h2 {
+  font-size: 29px;
+  line-height: 1.2;
+  margin: 15px 0 10px;
+}
+.hero p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  padding: 19px;
+  margin-bottom: 15px;
+}
+.card h3 { font-size: 16px; margin: 0 0 17px; }
+label {
+  display: block;
+  font-size: 13px;
+  margin: 14px 0 8px;
+  color: #dce5f5;
+}
+input:not([type="checkbox"]), select {
+  width: 100%;
+  padding: 13px;
+  background: #0a101b;
+  border: 1px solid #304057;
+  border-radius: 10px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+}
+input:focus, select:focus { border-color: var(--green); }
+input[type="file"] { padding: 12px; font-size: 12px; }
+input[type="checkbox"] {
+  accent-color: var(--green);
+  vertical-align: middle;
+}
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.upload {
+  border: 1px dashed #3c566c;
+  padding: 22px 12px;
+  text-align: center;
+  border-radius: 13px;
+  background: #0b1420;
+}
+.upload strong { display: block; margin-bottom: 8px; }
+.upload p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+button {
+  width: 100%;
+  padding: 14px;
+  border-radius: 11px;
+  border: 1px solid var(--green);
+  background: transparent;
+  color: var(--green);
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: .18s;
+}
+button:active { transform: scale(.98); }
+button:disabled { opacity: .6; cursor: wait; }
+.primary {
+  background: var(--green);
+  color: #06130c;
+  margin-top: 17px;
+}
+.note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.status {
+  display: none;
+  padding: 13px;
+  border-radius: 10px;
+  background: #0a101b;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 15px;
+  overflow-wrap: anywhere;
+}
+.status a {
+  color: var(--green);
+  font-weight: bold;
+  display: inline-block;
+  margin-top: 10px;
+}
+.preview {
+  width: 60px;
+  height: 60px;
+  border-radius: 15px;
+  object-fit: cover;
+  display: none;
+  margin-top: 10px;
+}
+footer {
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+  padding: 20px;
+}
+@media(max-width:420px) {
+  .row { grid-template-columns: 1fr; }
+  .hero h2 { font-size: 26px; }
+}
 </style>
 </head>
+
 <body>
 <header>
   <div class="logo">S</div>
-  <div><h1>Saiko APK Builder</h1><p>Build your Android app</p></div>
+  <div>
+    <h1>Saiko APK Builder</h1>
+    <p>Build your Android app</p>
+  </div>
 </header>
 
 <main>
-<section class="hero">
-  <span class="badge">● ANDROID APP STUDIO</span>
-  <h2>Your website.<br>Your Android app.</h2>
-  <p>Upload your website ZIP, customize your app details, and connect a build server to generate an installable APK.</p>
-</section>
+  <section class="hero">
+    <span class="badge">● ANDROID APP STUDIO</span>
+    <h2>Your website.<br>Your Android app.</h2>
+    <p>Upload your website ZIP, customize your app details, and build an installable Android APK.</p>
+  </section>
 
-<section class="card">
-<h3>01 — Website Files</h3>
-<div class="upload">
-<strong>📦 Upload your project ZIP</strong>
-<p>Include index.html, CSS, JavaScript, images and other project files.</p>
-<input id="zip" type="file" accept=".zip,application/zip">
-<p id="zipInfo">No ZIP selected</p>
-</div>
-<label>App icon (PNG / JPG)</label>
-<input id="icon" type="file" accept="image/png,image/jpeg,image/webp">
-<img id="preview" class="preview" alt="App icon preview">
-</section>
+  <section class="card">
+    <h3>01 — Website Files</h3>
 
-<section class="card">
-<h3>02 — App Customization</h3>
-<label>Application name</label>
-<input id="appName" maxlength="40" value="My Android App" placeholder="My Android App">
-<label>Package name</label>
-<input id="packageName" value="com.innocentsaiko.myapp" placeholder="com.example.myapp">
-<p class="note">Example: com.company.appname. Use lowercase letters, numbers and dots.</p>
-<div class="row">
-<div><label>Version name</label><input id="version" value="1.0.0" maxlength="20"></div>
-<div><label>Version code</label><input id="versionCode" type="number" value="1" min="1"></div>
-</div>
-<label>APK type</label>
-<select id="buildType">
-<option value="debug">Debug APK (testing)</option>
-<option value="release">Release APK</option>
-</select>
-</section>
+    <div class="upload">
+      <strong>📦 Upload your project ZIP</strong>
+      <p>Include index.html, CSS, JavaScript, images and other project files.</p>
+      <input id="zip" type="file" accept=".zip,application/zip">
+      <p id="zipInfo">No ZIP selected</p>
+    </div>
 
-<section class="card">
-<h3>03 — Android Permissions</h3>
-<label><input id="camera" type="checkbox" style="width:auto"> Camera</label>
-<label><input id="microphone" type="checkbox" style="width:auto"> Microphone / Audio recording</label>
-<label><input id="storage" type="checkbox" style="width:auto"> File upload / Media access</label>
-<label><input id="location" type="checkbox" style="width:auto"> Location</label>
-<label><input id="internet" type="checkbox" checked style="width:auto"> Internet access</label>
-<p class="note">Permissions will only work when the connected Android build server implements them correctly. Users may still need to grant permission on their phones.</p>
-</section>
+    <label for="icon">App icon (PNG / JPG / WebP)</label>
+    <input id="icon" type="file" accept="image/png,image/jpeg,image/webp">
+    <img id="preview" class="preview" alt="App icon preview">
+    <p class="note">Icon preview available. Applying the icon to the APK requires backend support.</p>
+  </section>
 
-<section class="card">
-<h3>04 — Build APK</h3>
-<label>Build server URL</label>
-<input id="server" type="url" placeholder="https://your-build-server.example">
-<p class="note">A real Android build server is required. This page does not compile or sign APK files by itself.</p>
-<button class="primary" id="build">⚡ Build My APK</button>
-<div id="status" class="status"></div>
-</section>
-<footer>Saiko APK Builder · Made for creators</footer>
+  <section class="card">
+    <h3>02 — App Customization</h3>
+
+    <label for="appName">Application name</label>
+    <input id="appName" maxlength="40" value="My Android App" placeholder="My Android App">
+
+    <label for="packageName">Package name</label>
+    <input id="packageName" value="com.innocentsaiko.myapp" placeholder="com.example.myapp">
+
+    <p class="note">Example: com.company.appname. Use letters, numbers, underscores and dots.</p>
+
+    <div class="row">
+      <div>
+        <label for="version">Version name</label>
+        <input id="version" value="1.0.0" maxlength="20">
+      </div>
+      <div>
+        <label for="versionCode">Version code</label>
+        <input id="versionCode" type="number" value="1" min="1" step="1">
+      </div>
+    </div>
+
+    <label for="buildType">APK type</label>
+    <select id="buildType">
+      <option value="debug">Debug APK (testing)</option>
+      <option value="release">Release APK</option>
+    </select>
+    <p class="note">Current workflow builds a debug APK. Release selection needs additional signing configuration.</p>
+  </section>
+
+  <section class="card">
+    <h3>03 — Android Permissions</h3>
+
+    <label><input id="camera" type="checkbox"> Camera</label>
+    <label><input id="microphone" type="checkbox"> Microphone / Audio recording</label>
+    <label><input id="storage" type="checkbox"> File upload / Media access</label>
+    <label><input id="location" type="checkbox"> Location</label>
+    <label><input id="internet" type="checkbox" checked> Internet access</label>
+
+    <p class="note">These options only take effect after the build workflow is configured to implement them in Android.</p>
+  </section>
+
+  <section class="card">
+    <h3>04 — Build APK</h3>
+
+    <label for="server">Build server URL</label>
+    <input id="server" type="url" placeholder="https://your-build-server.example">
+
+    <p class="note">Deploy the backend first, then enter its HTTPS URL here. This page cannot compile an APK by itself.</p>
+
+    <button class="primary" id="build">⚡ Build My APK</button>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <footer>Saiko APK Builder · Made for creators</footer>
 </main>
 
 <script>
-const $=id=>document.getElementById(id);
-let selectedZip=null,selectedIcon=null;
+const $ = id => document.getElementById(id);
 
-$('zip').addEventListener('change',e=>{
-  selectedZip=e.target.files[0]||null;
-  $('zipInfo').textContent=selectedZip
-    ? selectedZip.name+' · '+(selectedZip.size/1024/1024).toFixed(2)+' MB'
-    :'No ZIP selected';
+let selectedZip = null;
+let selectedIcon = null;
+let pollingTimer = null;
+let previewUrl = null;
+
+$('zip').addEventListener('change', event => {
+  selectedZip = event.target.files[0] || null;
+
+  $('zipInfo').textContent = selectedZip
+    ? `${selectedZip.name} · ${(selectedZip.size / 1024 / 1024).toFixed(2)} MB`
+    : 'No ZIP selected';
 });
 
-$('icon').addEventListener('change',e=>{
-  selectedIcon=e.target.files[0]||null;
-  const img=$('preview');
-  if(selectedIcon){
-    img.src=URL.createObjectURL(selectedIcon);
-    img.style.display='block';
-  }else img.style.display='none';
+$('icon').addEventListener('change', event => {
+  selectedIcon = event.target.files[0] || null;
+  const img = $('preview');
+
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null;
+
+  if (selectedIcon) {
+    previewUrl = URL.createObjectURL(selectedIcon);
+    img.src = previewUrl;
+    img.style.display = 'block';
+  } else {
+    img.removeAttribute('src');
+    img.style.display = 'none';
+  }
 });
 
-function message(text){
-  const box=$('status');
-  box.style.display='block';
-  box.textContent=text;
+function message(text) {
+  const box = $('status');
+  box.replaceChildren(document.createTextNode(text));
+  box.style.display = 'block';
 }
 
-$('build').addEventListener('click',async()=>{
-  const name=$('appName').value.trim();
-  const pkg=$('packageName').value.trim();
-  const server=$('server').value.trim();
+function showDownload(url) {
+  const box = $('status');
+  const link = document.createElement('a');
 
-  if(!selectedZip){
+  link.href = url;
+  link.textContent = '⬇ Download APK';
+  link.setAttribute('download', '');
+  link.rel = 'noopener';
+
+  box.replaceChildren(
+    document.createTextNode('APK build completed!'),
+    document.createElement('br'),
+    link
+  );
+  box.style.display = 'block';
+}
+
+function delay(ms) {
+  return new Promise(resolve => {
+    pollingTimer = setTimeout(resolve, ms);
+  });
+}
+
+async function checkBuild(server, buildId) {
+  for (let attempt = 1; attempt <= 180; attempt++) {
+    await delay(5000);
+
+    let response;
+    let data;
+
+    try {
+      response = await fetch(
+        new URL('/status/' + encodeURIComponent(buildId), server),
+        { cache: 'no-store' }
+      );
+
+      data = await response.json();
+    } catch {
+      message('Connection issue. Build status dobara check ho raha hai...');
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Build status check fail hua.');
+    }
+
+    if (data.status === 'completed' && data.downloadUrl) {
+      showDownload(new URL(data.downloadUrl, server).href);
+      return;
+    }
+
+    if (data.status === 'failed') {
+      throw new Error(data.message || 'APK build fail ho gaya.');
+    }
+
+    message(`APK build ho raha hai... (${attempt}/180)`);
+  }
+
+  message('Status checking time out hua. GitHub Actions mein build check karo.');
+}
+
+$('build').addEventListener('click', async () => {
+  const name = $('appName').value.trim();
+  const pkg = $('packageName').value.trim();
+  const version = $('version').value.trim();
+  const versionCode = $('versionCode').value.trim();
+  const serverText = $('server').value.trim();
+
+  if (pollingTimer) {
+    clearTimeout(pollingTimer);
+    pollingTimer = null;
+  }
+
+  if (!selectedZip) {
     message('Please select your project ZIP first.');
     return;
   }
-  if(!name){
-    message('Please enter an application name.');
+
+  if (selectedZip.size > 50 * 1024 * 1024) {
+    message('ZIP file 50 MB se chhoti honi chahiye.');
     return;
   }
-  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg)){
+
+  if (!name || name.length > 40) {
+    message('Application name 1–40 characters ka hona chahiye.');
+    return;
+  }
+
+  if (!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg)) {
     message('Invalid package name. Example: com.innocentsaiko.myapp');
     return;
   }
-  if(!server){
-    message('Build server is not connected yet. Deploy the backend first, then enter its URL here.');
+
+  if (!/^[A-Za-z0-9._+-]{1,20}$/.test(version)) {
+    message('Version name invalid hai.');
     return;
   }
 
-  let endpoint;
-  try{
-    endpoint=new URL(server);
-    if(endpoint.protocol!=='https:' && endpoint.hostname!=='localhost'){
+  if (!/^[1-9]\d*$/.test(versionCode)) {
+    message('Version code positive integer hona chahiye.');
+    return;
+  }
+
+  let server;
+
+  try {
+    server = new URL(serverText);
+
+    if (server.protocol !== 'https:' && server.hostname !== 'localhost') {
       throw new Error();
     }
-  }catch{
-    message('Enter a valid HTTPS build server URL.');
+  } catch {
+    message('Valid HTTPS build server URL enter karo.');
     return;
   }
 
-  const button=$('build');
-  button.disabled=true;
-  button.textContent='Building...';
+  const button = $('build');
+  button.disabled = true;
+  button.textContent = 'Building...';
 
-  try{
-    const form=new FormData();
-    form.append('project',selectedZip);
-    if(selectedIcon)form.append('icon',selectedIcon);
-    form.append('appName',name);
-    form.append('packageName',pkg);
-    form.append('version',$('version').value.trim());
-    form.append('versionCode',$('versionCode').value);
-    form.append('buildType',$('buildType').value);
+  try {
+    const form = new FormData();
 
-    ['camera','microphone','storage','location','internet'].forEach(key=>{
-      form.append(key,$(key).checked?'true':'false');
-    });
+    form.append('project', selectedZip);
 
-    const response=await fetch(new URL('/build',endpoint.origin),{
-      method:'POST',
-      body:form
-    });
-
-    if(!response.ok)throw new Error('Build server returned HTTP '+response.status);
-
-    const data=await response.json();
-    if(data.downloadUrl){
-      const link=document.createElement('a');
-      link.href=new URL(data.downloadUrl,endpoint.origin).href;
-      link.textContent='Download APK';
-      link.style.color='#36e6a0';
-      link.style.display='block';
-      link.style.marginTop='12px';
-      link.download='';
-      const box=$('status');
-      box.replaceChildren(document.createTextNode('Build completed. '),link);
-      box.style.display='block';
-    }else{
-      message(data.message||'Build request sent, but no APK download link was returned.');
+    if (selectedIcon) {
+      form.append('icon', selectedIcon);
     }
-  }catch(error){
-    message('Build failed: '+error.message+'. Check your build server configuration.');
-  }finally{
-    button.disabled=false;
-    button.textContent='⚡ Build My APK';
+
+    form.append('appName', name);
+    form.append('packageName', pkg);
+    form.append('version', version);
+    form.append('versionCode', versionCode);
+    form.append('buildType', $('buildType').value);
+
+    ['camera', 'microphone', 'storage', 'location', 'internet'].forEach(key => {
+      form.append(key, $(key).checked ? 'true' : 'false');
+    });
+
+    message('Website ZIP upload ho rahi hai...');
+
+    const response = await fetch(new URL('/build', server), {
+      method: 'POST',
+      body: form
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.message || `Server error: HTTP ${response.status}`);
+    }
+
+    if (data.downloadUrl) {
+      showDownload(new URL(data.downloadUrl, server).href);
+      return;
+    }
+
+    if (!data.buildId) {
+      throw new Error(data.message || 'Server ne build ID return nahi ki.');
+    }
+
+    message('Build request accepted. APK ready hone ka intezar karein...');
+    await checkBuild(server, data.buildId);
+
+  } catch (error) {
+    message('Build failed: ' + error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = '⚡ Build My APK';
   }
 });
 </script>
 </body>
-</html>
+  </html>
