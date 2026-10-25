@@ -5,79 +5,42 @@ const path = require("path");
 const crypto = require("crypto");
 
 const app = express();
-
-const uploadDir = "/tmp/saiko-uploads";
-fs.mkdirSync(uploadDir, { recursive: true });
-
 const upload = multer({
-  dest: uploadDir,
-  limits: {
-    fileSize: 50 * 1024 * 1024,
-    files: 2
-  }
+  dest: "/tmp/saiko-uploads/",
+  limits: { fileSize: 50 * 1024 * 1024 }
 });
 
-const GITHUB_OWNER = "eh9849879-lab";
-const GITHUB_REPO = "Saiko-APK-Builder";
-const WORKFLOW_FILE = "build.yml";
+const OWNER = "eh9849879-lab";
+const REPO = "Saiko-APK-Builder";
+const WORKFLOW = "build.yml";
 
 app.get("/", (req, res) => {
   res.send("Saiko APK Builder backend is running.");
 });
 
 app.get("/health", (req, res) => {
-  res.json({
-    status: "online",
-    builder: "Saiko APK Builder",
-    apkBuildConfigured: false,
-    message: "ZIP-to-APK transfer and artifact download are not implemented yet."
+  res.json({ status: "online", builder: "Saiko APK Builder" });
+});
+
+app.post("/build", upload.single("project"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: "Project ZIP upload karo." });
+  }
+
+  if (path.extname(req.file.originalname).toLowerCase() !== ".zip") {
+    fs.unlink(req.file.path, () => {});
+    return res.status(400).json({ message: "Sirf ZIP file supported hai." });
+  }
+
+  fs.unlink(req.file.path, () => {});
+
+  return res.status(501).json({
+    message:
+      "GitHub Actions trigger karne ka endpoint aur ZIP transfer abhi configure nahi hai."
   });
 });
 
-app.post(
-  "/build",
-  upload.fields([
-    { name: "project", maxCount: 1 },
-    { name: "icon", maxCount: 1 }
-  ]),
-  async (req, res) => {
-    const project = req.files?.project?.[0];
-    const icon = req.files?.icon?.[0];
-
-    const cleanup = () => {
-      for (const file of [project, icon]) {
-        if (file?.path) {
-          fs.unlink(file.path, () => {});
-        }
-      }
-    };
-
-    if (!project) {
-      cleanup();
-      return res.status(400).json({
-        message: "Project ZIP file upload karo."
-      });
-    }
-
-    if (path.extname(project.originalname).toLowerCase() !== ".zip") {
-      cleanup();
-      return res.status(400).json({
-        message: "Sirf ZIP project file supported hai."
-      });
-    }
-
-    cleanup();
-
-    return res.status(501).json({
-      message:
-        "ZIP upload receive hua, lekin secure ZIP transfer, " +
-        "GitHub Actions build aur APK download abhi configure nahi hain."
-    });
-  }
-);
-
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
-  console.log("Saiko APK Builder backend running on port " + PORT);
+  console.log("Saiko APK Builder running on port " + PORT);
 });
