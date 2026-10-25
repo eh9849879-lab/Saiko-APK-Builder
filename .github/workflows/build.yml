@@ -4,18 +4,39 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "Build request ID"
+        description: "Unique build request ID"
+        required: true
+        type: string
+      tag_name:
+        description: "GitHub Release tag containing website ZIP"
+        required: true
+        type: string
+      app_name:
+        description: "Android application name"
+        required: true
+        type: string
+      package_name:
+        description: "Android package name"
+        required: true
+        type: string
+      version:
+        description: "Application version"
+        required: true
+        type: string
+      version_code:
+        description: "Android version code"
         required: true
         type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
   build:
-    name: Build Saiko APK
+    name: Build Website APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Repository
@@ -25,7 +46,8 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -34,14 +56,124 @@ jobs:
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Check Build Environment
+      - name: Download Website ZIP
+        env:
+          GH_TOKEN: ${{ secrets.SAIKO_BUILDER_TOKEN }}
+          TAG_NAME: ${{ inputs.tag_name }}
         run: |
-          java -version
-          sdkmanager --list_installed
-          echo "Build request: ${{ inputs.run_id }}"
+          set -euo pipefail
 
-      - name: Explain Next Step
+          mkdir -p "$RUNNER_TEMP/saiko-input"
+
+          gh release download "$TAG_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "website.zip" \
+            --dir "$RUNNER_TEMP/saiko-input"
+
+          test -s "$RUNNER_TEMP/saiko-input/website.zip"
+
+      - name: Validate and Extract Website
         run: |
-          echo "Build environment is ready."
-          echo "Next, the uploaded website ZIP must be transferred here."
-          echo "Then the workflow can package it into an Android WebView APK."
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+
+          archive = Path.home() / "unused.zip"
+          archive = Path("${{ runner.temp }}") / "saiko-input" / "website.zip"
+
+          with zipfile.ZipFile(archive) as z:
+              entries = z.infolist()
+
+              if len(entries) > 10000:
+                  raise SystemExit("ZIP contains too many files")
+
+              total = sum(x.file_size for x in entries)
+              if total > 200 * 1024 * 1024:
+                  raise SystemExit("Extracted website exceeds 200 MB")
+
+              for item in entries:
+                  p = Path(item.filename)
+                  if p.is_absolute() or ".." in p.parts:
+                      raise SystemExit("Unsafe ZIP path detected")
+
+              z.extractall(Path("website"))
+          PY
+
+          if [ ! -f website/index.html ]; then
+            echo "ZIP ke root mein index.html hona chahiye."
+            exit 1
+          fi
+
+      - name: Prepare Android Project
+        env:
+          APP_NAME: ${{ inputs.app_name }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          VERSION_NAME: ${{ inputs.version }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+
+          cp -a android-template/. "$RUNNER_TEMP/android-project/"
+          cd "$RUNNER_TEMP/android-project"
+
+          mkdir -p app/src/main/assets/www
+          cp -a "$GITHUB_WORKSPACE/website/." app/src/main/assets/www/
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path.cwd()
+          app_name = os.environ["APP_NAME"].strip()
+          package_name = os.environ["PACKAGE_NAME"].strip()
+          version_name = os.environ["VERSION_NAME"].strip()
+          version_code = int(os.environ["VERSION_CODE"])
+
+          if not app_name or len(app_name) > 40:
+              raise SystemExit("Invalid app name")
+          if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+", package_name):
+              raise SystemExit("Invalid package name")
+          if version_code < 1:
+              raise SystemExit("Invalid version code")
+          if not re.fullmatch(r"[A-Za-z0-9._+-]{1,20}", version_name):
+              raise SystemExit("Invalid version name")
+
+          gradle = root / "app/build.gradle"
+          text = gradle.read_text()
+          text = re.sub(r"namespace\s+['\"][^'\"]+['\"]", f"namespace '{package_name}'", text)
+          text = re.sub(r"applicationId\s+['\"][^'\"]+['\"]", f"applicationId '{package_name}'", text)
+          text = re.sub(r"versionCode\s+\d+", f"versionCode {version_code}", text)
+          text = re.sub(r"versionName\s+['\"][^'\"]+['\"]", f"versionName '{version_name}'", text)
+          gradle.write_text(text)
+
+          manifest = root / "app/src/main/AndroidManifest.xml"
+          text = manifest.read_text()
+          text = text.replace('android:label="Saiko WebApp"', 'android:label="' + app_name.replace("&", "&amp;").replace('"', '\\"') + '"')
+          manifest.write_text(text)
+
+          java_file = root / "app/src/main/java/com/saiko/webapp/MainActivity.java"
+          if package_name != "com.saiko.webapp":
+              destination = root / "app/src/main/java" / Path(package_name.replace(".", "/"))
+              destination.mkdir(parents=True, exist_ok=True)
+              text = java_file.read_text()
+              text = re.sub(r"^package\s+[^;]+;", f"package {package_name};", text, count=1, flags=re.M)
+              (destination / "MainActivity.java").write_text(text)
+              java_file.unlink()
+          PY
+
+      - name: Build Debug APK
+        working-directory: ${{ runner.temp }}/android-project
+        run: |
+          set -euo pipefail
+          gradle --no-daemon assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saiko-APK-${{ inputs.run_id }}
+          path: ${{ runner.temp }}/android-project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3
