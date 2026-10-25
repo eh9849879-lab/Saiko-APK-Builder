@@ -20,7 +20,7 @@ app.use(express.json());
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 3 * 1024 * 1024 // 3MB (Vercel limit 4.5MB)
+    fileSize: 3 * 1024 * 1024 // 3MB limit (Vercel limit is 4.5MB)
   },
   fileFilter: (req, file, cb) => {
     if (file.originalname.toLowerCase().endsWith(".zip")) {
@@ -47,7 +47,6 @@ app.get(["/health", "/api/health"], (req, res) => {
   res.json({ ok: true });
 });
 
-// ✅ upload.any() use kiya taaki frontend file kisi bhi naam se bheje, accept ho jaye
 app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
   try {
     if (!TOKEN) {
@@ -99,7 +98,7 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
       body: JSON.stringify({
         tag_name: tag,
         name: `Saiko Build ${tag}`,
-        draft: true,
+        draft: false, // ✅ Yahan true se false kar diya hai
         prerelease: true
       })
     });
@@ -150,7 +149,7 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
   }
 });
 
-// ✅ Status Route (Ab Workflow fail hone par bhi error batayega)
+// ✅ Status Route (Workflow fail hone par bhi error batayega)
 app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
   try {
     if (!TOKEN) return res.status(500).json({ error: "Token missing." });
@@ -168,11 +167,8 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
       
       if (run) {
         if (run.conclusion === "failure" || run.conclusion === "startup_failure") {
-  return res.json({ 
-    status: "failed", 
-    error: "GitHub Actions build fail ho gaya. Actions tab mein logs check karo (quota ya setup issue ho sakta hai)." 
-  });
-}
+          return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya. Actions tab mein logs check karo." });
+        }
         if (run.status === "in_progress" || run.status === "queued") {
           return res.json({ status: "building" });
         }
