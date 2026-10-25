@@ -1,182 +1,162 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<meta name="theme-color" content="#0f172a" />
-<title>Saiko APK Builder</title>
-<style>
-:root {
-  --bg: #0f172a; --card: #1e293b; --card-2: #162032; --border: #334155;
-  --text: #e2e8f0; --muted: #94a3b8; --primary: #3b82f6; --success: #22c55e; --error: #ef4444;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: sans-serif; padding: 14px; padding-bottom: 40px; }
-.container { max-width: 640px; margin: 0 auto; }
-.header { text-align: center; padding: 10px 0 20px; }
-.header h1 { font-size: 1.5rem; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
-h2 { font-size: 0.95rem; color: #60a5fa; margin-bottom: 12px; }
-label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 5px; margin-top: 10px; }
-input { width: 100%; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: white; margin-bottom: 5px;}
-.file-info { font-size: 0.8rem; padding: 10px; background: var(--card-2); border-radius: 6px; display: none; margin-top: 8px; }
-.btn { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-top: 10px; }
-.btn:disabled { background: var(--border); cursor: not-allowed; }
-.download-btn { display: none; background: var(--success); margin-top: 15px; }
-.progress-box { display: none; margin-top: 20px; text-align: center; background: var(--bg); padding: 15px; border-radius: 10px; border: 1px solid var(--border);}
-.progress-box.show { display: block; }
-.percent-text { font-size: 2.5rem; font-weight: bold; color: #38bdf8; margin-bottom: 5px; }
-.time-text { font-size: 0.85rem; color: var(--muted); margin-bottom: 10px; }
-.bar-bg { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
-.bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.5s ease; }
-.status { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 0.85rem; display: none; }
-.status.show { display: block; }
-.status.info { background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid #3b82f6; }
-.status.error { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid #ef4444; }
-.status.success { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid #22c55e; }
-</style>
-</head>
-<body>
-<div class="container">
-  <div class="header"><h1>Saiko APK Builder</h1></div>
+const express = require("express");
+const multer = require("multer");
+const crypto = require("crypto");
 
-  <div class="card">
-    <h2>1. File Upload</h2>
-    <input type="file" id="fileInput" accept=".zip,.html,.htm" />
-    <div class="file-info" id="fileInfo"></div>
-  </div>
+const app = express();
 
-  <div class="card">
-    <h2>2. App Settings</h2>
-    <label>App Name</label><input type="text" id="appName" value="My App" />
-    <label>Package Name</label><input type="text" id="packageName" value="com.saiko.myapp" />
-    <label>Version Name</label><input type="text" id="versionName" value="1.0.0" />
-    <label>Version Code</label><input type="number" id="versionCode" value="1" />
-  </div>
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
 
-  <div class="card">
-    <h2>3. Backend URL</h2>
-    <input type="url" id="backendUrl" value="https://saiko-apk-builder.vercel.app/api" />
-  </div>
+app.use(express.json());
 
-  <div class="card">
-    <h2>4. Build</h2>
-    <button class="btn" id="buildBtn">Build APK</button>
-    
-    <div class="progress-box" id="progressBox">
-      <div class="percent-text" id="percentText">0%</div>
-      <div class="time-text" id="timeText">Time: 0s</div>
-      <div class="bar-bg"><div class="bar-fill" id="barFill"></div></div>
-    </div>
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.originalname.toLowerCase().endsWith(".zip")) cb(null, true);
+    else cb(new Error("Sirf ZIP file upload karo."));
+  }
+});
 
-    <div class="status" id="statusBox"></div>
-    <button class="btn download-btn" id="downloadBtn">Download APK</button>
-  </div>
-</div>
+const OWNER = "eh9849879-lab";
+const REPO = "Saiko-APK-Builder";
+const TOKEN = process.env.SAIKO_BUILDER_TOKEN;
 
-<script>
-(function() {
-  var $ = function(id) { return document.getElementById(id); };
-  var selectedFile = null, currentBuildId = null, pollTimer = null, timerInterval = null, startTime = null;
-  var progress = 0, maxProgress = 0;
+app.get(["/", "/api", "/api/"], (req, res) => res.json({ app: "Saiko Backend", status: "running" }));
+app.get(["/health", "/api/health"], (req, res) => res.json({ ok: true }));
 
-  $('fileInput').addEventListener('change', function() {
-    selectedFile = this.files[0];
-    if (selectedFile) {
-      $('fileInfo').style.display = 'block';
-      $('fileInfo').textContent = selectedFile.name + ' (' + (selectedFile.size / 1024).toFixed(1) + ' KB)';
+app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
+  try {
+    if (!TOKEN) return res.status(500).json({ error: "SAIKO_BUILDER_TOKEN missing." });
+    const file = req.files && req.files[0];
+    if (!file) return res.status(400).json({ error: "ZIP file missing." });
+
+    const appName = String(req.body.appName || "").trim();
+    const packageName = String(req.body.packageName || "").trim();
+    const version = String(req.body.version || req.body.versionName || "1.0.0").trim();
+    const versionCode = String(req.body.versionCode || "1").trim();
+    const permissions = String(req.body.permissions || "INTERNET").trim(); // ✅ Naya field
+
+    if (!appName || !/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/.test(packageName)) return res.status(400).json({ error: "App/package name invalid." });
+    if (!/^\d+$/.test(versionCode)) return res.status(400).json({ error: "Version code number hona chahiye." });
+
+    const tag = "saiko-" + crypto.randomUUID();
+
+    async function github(path, options = {}) {
+      const response = await fetch("https://api.github.com" + path, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...(options.headers || {})
+        }
+      });
+      const text = await response.text();
+      if (!response.ok) throw new Error(`GitHub API ${response.status}: ${text.slice(0, 400)}`);
+      return text ? JSON.parse(text) : {};
     }
-  });
 
-  function showStatus(type, msg) {
-    $('statusBox').className = 'status show ' + type;
-    $('statusBox').innerHTML = msg;
+    const release = await github(`/repos/${OWNER}/${REPO}/releases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tag_name: tag, name: `Saiko Build ${tag}`, draft: false, prerelease: true })
+    });
+
+    const uploadUrl = release.upload_url.split("{")[0];
+    const uploaded = await fetch(`${uploadUrl}?name=website.zip`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json", "Content-Type": "application/zip" },
+      body: file.buffer
+    });
+
+    if (!uploaded.ok) throw new Error("ZIP upload to GitHub failed.");
+
+    await github(`/repos/${OWNER}/${REPO}/actions/workflows/build.yml/dispatches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref: "main",
+        inputs: { 
+          run_id: tag, 
+          tag_name: tag, 
+          app_name: appName, 
+          package_name: packageName, 
+          version: version, 
+          version_code: versionCode,
+          permissions: permissions // ✅ GitHub ko bhej diya
+        }
+      })
+    });
+
+    res.json({ buildId: tag, status: "queued" });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Build request failed." });
   }
+});
 
-  function setProgress(val, max) {
-    progress = val; maxProgress = max;
-    $('barFill').style.width = progress + '%';
-    $('percentText').textContent = Math.round(progress) + '%';
-  }
+app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
+  try {
+    if (!TOKEN) return res.status(500).json({ error: "Token missing." });
+    const tag = req.params.id;
 
-  function startTimer() {
-    startTime = Date.now();
-    if(timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(function() {
-      var sec = Math.floor((Date.now() - startTime) / 1000);
-      $('timeText').textContent = 'Time: ' + sec + 's';
-      if (progress < maxProgress && progress < 98) {
-        setProgress(progress + 0.5, maxProgress);
-      }
-    }, 1000);
-  }
+    const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${encodeURIComponent(tag)}`, {
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" }
+    });
 
-  $('buildBtn').addEventListener('click', async function() {
-    if (!selectedFile) return showStatus('error', 'Pehle file select karo!');
-    
-    $('buildBtn').disabled = true;
-    $('downloadBtn').style.display = 'none';
-    $('progressBox').classList.add('show');
-    setProgress(5, 30);
-    startTimer();
-    showStatus('info', 'Upload ho raha hai...');
-
-    try {
-      var fd = new FormData();
-      fd.append('file', selectedFile);
-      fd.append('appName', $('appName').value);
-      fd.append('packageName', $('packageName').value);
-      fd.append('versionName', $('versionName').value);
-      fd.append('versionCode', $('versionCode').value);
-
-      var res = await fetch($('backendUrl').value + '/build', { method: 'POST', body: fd });
-      var data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error || 'Upload fail');
-      
-      currentBuildId = data.buildId;
-      setProgress(35, 90);
-      showStatus('info', 'Build shuru ho gaya. Wait karo...');
-      checkStatus();
-      
-    } catch (err) {
-      showStatus('error', err.message);
-      $('buildBtn').disabled = false;
-      clearInterval(timerInterval);
+    if (response.ok) {
+      const release = await response.json();
+      const apk = (release.assets || []).find(asset => asset.name === `Saiko-APK-${tag}.apk`);
+      if (apk) return res.json({ status: "completed" });
     }
-  });
 
-  async function checkStatus() {
-    try {
-      var res = await fetch($('backendUrl').value + '/status/' + currentBuildId);
-      var data = await res.json();
-      
-      if (data.status === 'completed') {
-        clearInterval(timerInterval);
-        setProgress(100, 100);
-        $('buildBtn').disabled = false;
-        $('downloadBtn').style.display = 'block';
-        showStatus('success', '✅ APK Ready hai! Download karo.');
-        $('downloadBtn').onclick = function() {
-          window.location.href = $('backendUrl').value + '/download/' + currentBuildId;
-        };
-        return;
-      }
-      
-      if (data.status === 'failed') {
-        clearInterval(timerInterval);
-        $('buildBtn').disabled = false;
-        return showStatus('error', '❌ ' + (data.error || 'Build fail ho gaya'));
-      }
+    const runsRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=20`, {
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" }
+    });
 
-      // Agar abhi bhi ban raha hai
-      pollTimer = setTimeout(checkStatus, 4000);
-      
-    } catch (err) {
-      pollTimer = setTimeout(checkStatus, 4000); // Network error par retry
+    if (runsRes.ok) {
+      const runs = await runsRes.json();
+      const run = runs.workflow_runs.find(r => (r.name && r.name.includes(tag)) || (r.display_title && r.display_title.includes(tag)));
+      if (run) {
+        if (run.conclusion === "failure" || run.conclusion === "cancelled") return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya." });
+        if (run.status === "in_progress" || run.status === "queued") return res.json({ status: "building" });
+      } else {
+        return res.json({ status: "queued" });
+      }
     }
+    res.json({ status: "building" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-})();
-</script>
-</body>
-</html>
+});
+
+app.get(["/download/:id", "/api/download/:id"], async (req, res) => {
+  try {
+    if (!TOKEN) return res.status(500).send("Token missing.");
+    const tag = req.params.id;
+
+    const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${encodeURIComponent(tag)}`, {
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" }
+    });
+
+    if (!response.ok) return res.status(404).send("Release nahi mili.");
+
+    const release = await response.json();
+    const apk = (release.assets || []).find(asset => asset.name === `Saiko-APK-${tag}.apk`);
+    if (!apk) return res.status(404).send("APK ready nahi hai.");
+
+    const apkResponse = await fetch(apk.url, { headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/octet-stream" } });
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Disposition", `attachment; filename="saiko-app.apk"`);
+    res.send(Buffer.from(await apkResponse.arrayBuffer()));
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+module.exports = app;
