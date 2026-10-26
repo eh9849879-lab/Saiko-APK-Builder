@@ -78,7 +78,7 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
 
     if (!uploaded.ok) throw new Error("ZIP upload to GitHub failed.");
 
-    await github(`/repos/${OWNER}/${REPO}/actions/workflows/build.yml/dispatches`, {
+    await github(`/repos/${OWNER}/${REPO}/actions/workflows/builder.yml/dispatches`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
