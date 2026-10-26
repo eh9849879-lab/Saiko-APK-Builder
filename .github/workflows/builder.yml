@@ -84,10 +84,17 @@ jobs:
           PERMS="${{ github.event.inputs.permissions }}"
           echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/AndroidManifest.xml
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' >> android-template/app/src/main/AndroidManifest.xml
+          
+          # ✅ Permissions loop
           IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
           for PERM in "${PERM_ARRAY[@]}"; do
             echo "    <uses-permission android:name=\"android.permission.$PERM\" />" >> android-template/app/src/main/AndroidManifest.xml
           done
+          
+          # ✅ Hardcode important permissions just in case
+          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> android-template/app/src/main/AndroidManifest.xml
+          
           echo '    <application' >> android-template/app/src/main/AndroidManifest.xml
           echo '        android:allowBackup="true"' >> android-template/app/src/main/AndroidManifest.xml
           echo '        android:icon="@mipmap/ic_launcher"' >> android-template/app/src/main/AndroidManifest.xml
