@@ -2,7 +2,7 @@ name: Build Website APK
 run-name: Build ${{ inputs.tag_name }}
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
     inputs:
       run_id:
         required: true
