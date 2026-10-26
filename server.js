@@ -16,7 +16,7 @@ app.use(express.json());
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     if (file.originalname.toLowerCase().endsWith(".zip")) cb(null, true);
     else cb(new Error("Sirf ZIP file upload karo."));
@@ -27,6 +27,7 @@ const OWNER = "eh9849879-lab";
 const REPO = "Saiko-APK-Builder";
 const TOKEN = process.env.SAIKO_BUILDER_TOKEN;
 
+// ✅ Dono routes define kiye hain taaki koi confusion na ho
 app.get(["/", "/api", "/api/"], (req, res) => res.json({ app: "Saiko Backend", status: "running" }));
 app.get(["/health", "/api/health"], (req, res) => res.json({ ok: true }));
 
@@ -40,7 +41,7 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
     const packageName = String(req.body.packageName || "").trim();
     const version = String(req.body.version || req.body.versionName || "1.0.0").trim();
     const versionCode = String(req.body.versionCode || "1").trim();
-    const permissions = String(req.body.permissions || "INTERNET").trim(); // ✅ Naya field
+    const permissions = String(req.body.permissions || "INTERNET").trim();
 
     if (!appName || !/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/.test(packageName)) return res.status(400).json({ error: "App/package name invalid." });
     if (!/^\d+$/.test(versionCode)) return res.status(400).json({ error: "Version code number hona chahiye." });
@@ -82,15 +83,7 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ref: "main",
-        inputs: { 
-          run_id: tag, 
-          tag_name: tag, 
-          app_name: appName, 
-          package_name: packageName, 
-          version: version, 
-          version_code: versionCode,
-          permissions: permissions // ✅ GitHub ko bhej diya
-        }
+        inputs: { run_id: tag, tag_name: tag, app_name: appName, package_name: packageName, version: version, version_code: versionCode, permissions: permissions }
       })
     });
 
@@ -123,7 +116,7 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
       const runs = await runsRes.json();
       const run = runs.workflow_runs.find(r => (r.name && r.name.includes(tag)) || (r.display_title && r.display_title.includes(tag)));
       if (run) {
-        if (run.conclusion === "failure" || run.conclusion === "cancelled") return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya." });
+        if (run.conclusion === "failure" || run.conclusion === "cancelled") return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya. Logs check karo." });
         if (run.status === "in_progress" || run.status === "queued") return res.json({ status: "building" });
       } else {
         return res.json({ status: "queued" });
