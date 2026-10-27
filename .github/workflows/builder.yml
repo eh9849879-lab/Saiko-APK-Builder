@@ -74,8 +74,10 @@ jobs:
           ORIENTATION="${{ github.event.inputs.orientation }}"
           PERMS="${{ github.event.inputs.permissions }}"
           
-          mkdir -p android-template/app/src/main/res/values
+          # ✅ DELETE OLD JAVA FILES (Duplicate Class Error Fix)
+          rm -rf android-template/app/src/main/java
           mkdir -p android-template/app/src/main/java/$PKG_PATH
+          mkdir -p android-template/app/src/main/res/values
 
           # 1. Build.gradle
           cat > android-template/app/build.gradle << EOF
@@ -114,7 +116,7 @@ jobs:
           echo "    <string name=\"app_name\">$APP_NAME</string>" >> android-template/app/src/main/res/values/strings.xml
           echo '</resources>' >> android-template/app/src/main/res/values/strings.xml
 
-          # 3. Theme (Material Theme for better compatibility)
+          # 3. Theme
           echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/styles.xml
           echo '<resources>' >> android-template/app/src/main/res/values/styles.xml
           echo '    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" />' >> android-template/app/src/main/res/values/styles.xml
@@ -134,9 +136,9 @@ jobs:
           echo '    </application>' >> android-template/app/src/main/AndroidManifest.xml
           echo '</manifest>' >> android-template/app/src/main/AndroidManifest.xml
 
-          # 5. MainActivity.java (FIXED: Added try-catch and getAssets override)
-          cat > android-template/app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
-          package com.saiko.webapp;
+          # 5. MainActivity.java (Dynamic Package & Crash Fix)
+          cat > android-template/app/src/main/java/$PKG_PATH/MainActivity.java << EOF
+          package $PKG;
 
           import android.app.Activity;
           import android.content.res.AssetManager;
@@ -166,16 +168,14 @@ jobs:
                       webView.loadUrl("file:///android_asset/www/index.html");
 
                   } catch (Throwable e) {
-                      // Fallback UI if WebView crashes (e.g. missing resources)
                       e.printStackTrace();
                       android.widget.TextView textView = new android.widget.TextView(this);
-                      textView.setText("App could not load. Please update Android System WebView from Play Store.");
+                      textView.setText("App could not load. Please update Android System WebView.");
                       textView.setTextSize(18);
                       setContentView(textView);
                   }
               }
 
-              // ✅ Fix for Resources$NotFoundException on Android 15/16
               @Override
               public AssetManager getAssets() {
                   return getResources().getAssets();
