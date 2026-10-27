@@ -18,7 +18,7 @@ app.use(express.json());
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 }, // 4MB Vercel limit safe side
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.originalname.toLowerCase().endsWith(".zip")) cb(null, true);
     else cb(new Error("Sirf ZIP file upload karo."));
@@ -35,13 +35,10 @@ app.get(["/health", "/api/health"], (req, res) => res.json({ ok: true }));
 app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
   try {
     if (!TOKEN) return res.status(500).json({ error: "SAIKO_BUILDER_TOKEN missing." });
-    
     const file = req.files && req.files[0];
     if (!file) return res.status(400).json({ error: "ZIP file missing." });
 
-    // ✅ Frontend se Build ID lo, agar nahi aayi to khud banao
     const tag = req.body.buildId || ("saiko-" + crypto.randomUUID());
-    
     const appName = String(req.body.appName || "").trim();
     const packageName = String(req.body.packageName || "").trim();
     const version = String(req.body.version || req.body.versionName || "1.0.0").trim();
@@ -50,9 +47,7 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
     const buildType = String(req.body.buildType || "both").trim();
     const orientation = String(req.body.orientation || "portrait").trim();
 
-    if (!appName || !/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/.test(packageName)) {
-      return res.status(400).json({ error: "App name ya package name invalid hai." });
-    }
+    if (!appName || !/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/.test(packageName)) return res.status(400).json({ error: "App name ya package name invalid hai." });
 
     async function github(path, options = {}) {
       const response = await fetch("https://api.github.com" + path, {
@@ -108,6 +103,7 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
     if (!TOKEN) return res.status(500).json({ error: "Token missing." });
     const tag = req.params.id;
 
+    // 1. Check Releases for APK/AAB
     const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${encodeURIComponent(tag)}`, {
       headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" }
     });
@@ -115,7 +111,6 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
     if (response.ok) {
       const release = await response.json();
       const assets = release.assets || [];
-      
       const hasDebug = assets.some(a => a.name === `Saiko-Debug-${tag}.apk`);
       const hasRelease = assets.some(a => a.name === `Saiko-Release-${tag}.apk`);
       const hasAab = assets.some(a => a.name === `Saiko-Release-${tag}.aab`);
@@ -125,6 +120,7 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
       }
     }
 
+    // 2. Check GitHub Actions
     const runsRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=20`, {
       headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" }
     });
@@ -132,9 +128,18 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
     if (runsRes.ok) {
       const runs = await runsRes.json();
       const run = runs.workflow_runs.find(r => (r.name && r.name.includes(tag)) || (r.display_title && r.display_title.includes(tag)));
+      
       if (run) {
-        if (run.conclusion === "failure" || run.conclusion === "cancelled") return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya." });
-        if (run.status === "in_progress" || run.status === "queued") return res.json({ status: "building" });
+        if (run.conclusion === "failure" || run.conclusion === "cancelled") {
+          return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya. Logs check karo." });
+        }
+        // ✅ FIX: Agar workflow pass ho gaya par APK nahi mili (9s wala case)
+        if (run.status === "completed" && run.conclusion === "success") {
+          return res.json({ status: "failed", error: "Build complete hua par APK file nahi bani. GitHub Actions logs check karo." });
+        }
+        if (run.status === "in_progress" || run.status === "queued") {
+          return res.json({ status: "building" });
+        }
       } else {
         return res.json({ status: "queued" });
       }
@@ -170,7 +175,6 @@ app.get(["/download/:id", "/api/download/:id"], async (req, res) => {
     
     const readableStream = Readable.fromWeb(fileResponse.body);
     await pipeline(readableStream, res);
-    
   } catch (error) {
     if (!res.headersSent) res.status(500).send(error.message);
   }
