@@ -41,6 +41,8 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
     const version = String(req.body.version || req.body.versionName || "1.0.0").trim();
     const versionCode = String(req.body.versionCode || "1").trim();
     const permissions = String(req.body.permissions || "INTERNET").trim();
+    const buildType = String(req.body.buildType || "both").trim();
+    const orientation = String(req.body.orientation || "portrait").trim();
 
     if (!appName || !/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/.test(packageName)) return res.status(400).json({ error: "App/package name invalid." });
     if (!/^\d+$/.test(versionCode)) return res.status(400).json({ error: "Version code number hona chahiye." });
@@ -82,7 +84,11 @@ app.post(["/build", "/api/build"], upload.any(), async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ref: "main",
-        inputs: { run_id: tag, tag_name: tag, app_name: appName, package_name: packageName, version: version, version_code: versionCode, permissions: permissions }
+        inputs: { 
+          run_id: tag, tag_name: tag, app_name: appName, package_name: packageName, 
+          version: version, version_code: versionCode, permissions: permissions,
+          build_type: buildType, orientation: orientation
+        }
       })
     });
 
@@ -103,8 +109,15 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
 
     if (response.ok) {
       const release = await response.json();
-      const apk = (release.assets || []).find(asset => asset.name === `Saiko-APK-${tag}.apk`);
-      if (apk) return res.json({ status: "completed" });
+      const assets = release.assets || [];
+      
+      const hasDebug = assets.some(a => a.name === `Saiko-Debug-${tag}.apk`);
+      const hasRelease = assets.some(a => a.name === `Saiko-Release-${tag}.apk`);
+      const hasAab = assets.some(a => a.name === `Saiko-Release-${tag}.aab`);
+
+      if (hasDebug || hasRelease || hasAab) {
+        return res.json({ status: "completed", hasDebug, hasRelease, hasAab });
+      }
     }
 
     const runsRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=20`, {
@@ -115,7 +128,7 @@ app.get(["/status/:id", "/api/status/:id"], async (req, res) => {
       const runs = await runsRes.json();
       const run = runs.workflow_runs.find(r => (r.name && r.name.includes(tag)) || (r.display_title && r.display_title.includes(tag)));
       if (run) {
-        if (run.conclusion === "failure" || run.conclusion === "cancelled") return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya. Logs check karo." });
+        if (run.conclusion === "failure" || run.conclusion === "cancelled") return res.json({ status: "failed", error: "GitHub Actions build fail ho gaya." });
         if (run.status === "in_progress" || run.status === "queued") return res.json({ status: "building" });
       } else {
         return res.json({ status: "queued" });
@@ -131,6 +144,7 @@ app.get(["/download/:id", "/api/download/:id"], async (req, res) => {
   try {
     if (!TOKEN) return res.status(500).send("Token missing.");
     const tag = req.params.id;
+    const type = req.query.type || "debug"; // debug, release, aab
 
     const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${encodeURIComponent(tag)}`, {
       headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" }
@@ -139,13 +153,23 @@ app.get(["/download/:id", "/api/download/:id"], async (req, res) => {
     if (!response.ok) return res.status(404).send("Release nahi mili.");
 
     const release = await response.json();
-    const apk = (release.assets || []).find(asset => asset.name === `Saiko-APK-${tag}.apk`);
-    if (!apk) return res.status(404).send("APK ready nahi hai.");
+    let filename = "";
+    if (type === "release") filename = `Saiko-Release-${tag}.apk`;
+    else if (type === "aab") filename = `Saiko-Release-${tag}.aab`;
+    else filename = `Saiko-Debug-${tag}.apk`;
 
-    const apkResponse = await fetch(apk.url, { headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/octet-stream" } });
-    res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    res.setHeader("Content-Disposition", `attachment; filename="saiko-app.apk"`);
-    res.send(Buffer.from(await apkResponse.arrayBuffer()));
+    const asset = (release.assets || []).find(a => a.name === filename);
+    if (!asset) return res.status(404).send("Requested file ready nahi hai.");
+
+    const fileResponse = await fetch(asset.url, { headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/octet-stream" } });
+    
+    if (type === "aab") {
+      res.setHeader("Content-Type", "application/octet-stream");
+    } else {
+      res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    }
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(await fileResponse.arrayBuffer()));
   } catch (error) {
     res.status(500).send(error.message);
   }
