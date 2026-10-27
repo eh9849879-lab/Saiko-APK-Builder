@@ -74,12 +74,10 @@ jobs:
           ORIENTATION="${{ github.event.inputs.orientation }}"
           PERMS="${{ github.event.inputs.permissions }}"
           
-          # ✅ DELETE OLD JAVA FILES (Duplicate Class Error Fix)
           rm -rf android-template/app/src/main/java
           mkdir -p android-template/app/src/main/java/$PKG_PATH
           mkdir -p android-template/app/src/main/res/values
 
-          # 1. Build.gradle
           cat > android-template/app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
@@ -110,25 +108,36 @@ jobs:
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
           EOF
 
-          # 2. Strings.xml
           echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/strings.xml
           echo '<resources>' >> android-template/app/src/main/res/values/strings.xml
           echo "    <string name=\"app_name\">$APP_NAME</string>" >> android-template/app/src/main/res/values/strings.xml
           echo '</resources>' >> android-template/app/src/main/res/values/strings.xml
 
-          # 3. Theme
           echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/styles.xml
           echo '<resources>' >> android-template/app/src/main/res/values/styles.xml
           echo '    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" />' >> android-template/app/src/main/res/values/styles.xml
           echo '</resources>' >> android-template/app/src/main/res/values/styles.xml
 
-          # 4. AndroidManifest
+          # ✅ Manifest with Notifications & Media Permissions
           echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/AndroidManifest.xml
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.RECORD_AUDIO" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.CAMERA" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' >> android-template/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' >> android-template/app/src/main/AndroidManifest.xml
+          
           IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
           for PERM in "${PERM_ARRAY[@]}"; do
             echo "    <uses-permission android:name=\"android.permission.$PERM\" />" >> android-template/app/src/main/AndroidManifest.xml
           done
+          
           echo '    <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="@string/app_name" android:supportsRtl="true" android:usesCleartextTraffic="true" android:theme="@style/AppTheme">' >> android-template/app/src/main/AndroidManifest.xml
           echo "        <activity android:name=\".MainActivity\" android:exported=\"true\" android:screenOrientation=\"$ORIENTATION\" android:configChanges=\"orientation|screenSize|keyboardHidden\" android:hardwareAccelerated=\"true\">" >> android-template/app/src/main/AndroidManifest.xml
           echo '            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>' >> android-template/app/src/main/AndroidManifest.xml
@@ -136,49 +145,127 @@ jobs:
           echo '    </application>' >> android-template/app/src/main/AndroidManifest.xml
           echo '</manifest>' >> android-template/app/src/main/AndroidManifest.xml
 
-          # 5. MainActivity.java (Dynamic Package & Crash Fix)
-          cat > android-template/app/src/main/java/$PKG_PATH/MainActivity.java << EOF
-          package $PKG;
+          # ✅ Naya MainActivity.java (Runtime Permissions + Offline + Notifications)
+          cat > android-template/app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
+          package com.saiko.webapp;
 
+          import android.Manifest;
           import android.app.Activity;
-          import android.content.res.AssetManager;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.net.Uri;
+          import android.os.Build;
           import android.os.Bundle;
-          import android.webkit.WebView;
+          import android.webkit.PermissionRequest;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
+          import android.webkit.WebView;
           import android.webkit.WebViewClient;
 
           public class MainActivity extends Activity {
               private WebView webView;
+              private ValueCallback<Uri[]> filePathCallback;
+              private PermissionRequest pendingWebPermissionRequest;
+              private static final int FILECHOOSER_RESULTCODE = 1001;
+              private static final int PERMISSION_REQUEST_CODE = 1002;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
 
-                  try {
-                      webView = new WebView(this);
-                      setContentView(webView);
+                  // ✅ Runtime Permissions maango (Mic, Camera, Media, Notifications)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      String[] perms = {
+                          Manifest.permission.RECORD_AUDIO,
+                          Manifest.permission.CAMERA,
+                          Manifest.permission.MODIFY_AUDIO_SETTINGS
+                      };
+                      requestPermissions(perms, PERMISSION_REQUEST_CODE);
+                  }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1003);
+                  }
 
-                      WebSettings settings = webView.getSettings();
-                      settings.setJavaScriptEnabled(true);
-                      settings.setDomStorageEnabled(true);
-                      settings.setAllowFileAccess(true);
-                      settings.setAllowContentAccess(true);
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  
+                  // ✅ Offline Cache Settings
+                  settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+                  settings.setAppCacheEnabled(true);
+                  settings.setAppCachePath(getCacheDir().getAbsolutePath());
 
-                      webView.setWebViewClient(new WebViewClient());
-                      webView.loadUrl("file:///android_asset/www/index.html");
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                          // ✅ Offline Fallback (agar network nahi hai to local page load karega)
+                          view.loadUrl("file:///android_asset/www/index.html");
+                      }
+                  });
 
-                  } catch (Throwable e) {
-                      e.printStackTrace();
-                      android.widget.TextView textView = new android.widget.TextView(this);
-                      textView.setText("App could not load. Please update Android System WebView.");
-                      textView.setTextSize(18);
-                      setContentView(textView);
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                          if (MainActivity.this.filePathCallback != null) {
+                              MainActivity.this.filePathCallback.onReceiveValue(null);
+                          }
+                          MainActivity.this.filePathCallback = filePathCallback;
+                          Intent intent = fileChooserParams.createIntent();
+                          try {
+                              startActivityForResult(intent, FILECHOOSER_RESULTCODE);
+                          } catch (Exception e) {
+                              MainActivity.this.filePathCallback = null;
+                              return false;
+                          }
+                          return true;
+                      }
+
+                      @Override
+                      public void onPermissionRequest(final PermissionRequest request) {
+                          runOnUiThread(() -> request.grant(request.getResources()));
+                      }
+                  });
+
+                  webView.loadUrl("file:///android_asset/www/index.html");
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQUEST_CODE && pendingWebPermissionRequest != null) {
+                      boolean allGranted = true;
+                      for (int result : grantResults) {
+                          if (result != PackageManager.PERMISSION_GRANTED) {
+                              allGranted = false;
+                              break;
+                          }
+                      }
+                      if (allGranted) {
+                          pendingWebPermissionRequest.grant(pendingWebPermissionRequest.getResources());
+                      } else {
+                          pendingWebPermissionRequest.deny();
+                      }
+                      pendingWebPermissionRequest = null;
                   }
               }
 
               @Override
-              public AssetManager getAssets() {
-                  return getResources().getAssets();
+              protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+                  if (requestCode == FILECHOOSER_RESULTCODE) {
+                      if (filePathCallback != null) {
+                          filePathCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, intent));
+                          filePathCallback = null;
+                      }
+                  } else {
+                      super.onActivityResult(requestCode, resultCode, intent);
+                  }
               }
           }
           EOF
@@ -207,4 +294,4 @@ jobs:
           TAG="${{ github.event.inputs.tag_name }}"
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk; gh release upload "$TAG" "app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk" --repo "${{ github.repository }}" --clobber; fi
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Saiko-Release-$TAG.apk; gh release upload "$TAG" "app/build/outputs/apk/release/Saiko-Release-$TAG.apk" --repo "${{ github.repository }}" --clobber; fi
-          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then cp app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/Saiko-Release-$TAG.aab; gh release upload "$TAG" "app/build/outputs/bundle/release/Saiko-Release-$TAG.aab" --repo "${{ github.repository }}" --clobber; fi
+          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then cp app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/Saiko-Release-$TAG.aab; gh release upload "$TAG" "app/build/outputs/bundle/release/Saiko-Release-$TAG.aab" --repo "${{ github.repository }}" --clobber; file/release/Saiko-Release-$TAG.aab" --repo "${{ github.repository }}" --clobber; fi
