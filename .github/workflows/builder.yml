@@ -4,27 +4,15 @@ run-name: Build ${{ inputs.tag_name }}
 on:
   workflow_dispatch:
     inputs:
-      run_id:
-        required: true
-      tag_name:
-        required: true
-      app_name:
-        required: true
-      package_name:
-        required: true
-      version:
-        required: true
-      version_code:
-        required: true
-      permissions:
-        required: false
-        default: 'INTERNET'
-      build_type:
-        required: true
-        default: 'both' # debug, release, both
-      orientation:
-        required: false
-        default: 'portrait'
+      run_id: { required: true }
+      tag_name: { required: true }
+      app_name: { required: true }
+      package_name: { required: true }
+      version: { required: true }
+      version_code: { required: true }
+      permissions: { required: false, default: 'INTERNET' }
+      build_type: { required: true, default: 'both' }
+      orientation: { required: false, default: 'portrait' }
 
 permissions:
   contents: write
@@ -39,33 +27,27 @@ jobs:
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+        with: { java-version: '17', distribution: 'temurin' }
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4.0.4
-        with:
-          packages: ''
+        with: { packages: '' }
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.9'
+        with: { gradle-version: '8.9' }
 
       - name: Download website ZIP
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download "${{ github.event.inputs.tag_name }}" --pattern "website.zip" --repo "${{ github.repository }}"
+        run: gh release download "${{ github.event.inputs.tag_name }}" --pattern "website.zip" --repo "${{ github.repository }}"
 
-      # ✅ Decode Keystore
       - name: Decode Keystore
         if: ${{ github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'both' }}
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android-template/app/saiko-release.jks
 
-      - name: Extract ZIP & Setup Base Resources
+      - name: Extract ZIP & Setup Resources
         run: |
           mkdir -p android-template/app/src/main/assets/www
           mkdir -p temp_extract
@@ -73,80 +55,69 @@ jobs:
           INDEX_PATH=$(find temp_extract -name "index.html" | head -n 1)
           ROOT_DIR=$(dirname "$INDEX_PATH")
           cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/www/
-
-          mkdir -p android-template/app/src/main/res/values
-          mkdir -p android-template/app/src/main/java/com/saiko/webapp
-          echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/styles.xml
-          echo '<resources>' >> android-template/app/src/main/res/values/styles.xml
-          echo '    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar" />' >> android-template/app/src/main/res/values/styles.xml
-          echo '</resources>' >> android-template/app/src/main/res/values/styles.xml
-          echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/strings.xml
-          echo '<resources>' >> android-template/app/src/main/res/values/strings.xml
-          echo '    <string name="app_name">MyApp</string>' >> android-template/app/src/main/res/values/strings.xml
-          echo '</resources>' >> android-template/app/src/main/res/values/strings.xml
           
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android-template/app/src/main/res/mipmap-$density
               echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android-template/app/src/main/res/mipmap-$density/ic_launcher.png
           done
 
-      # ✅ Create build.gradle with Signing Config
-      - name: Create build.gradle
+      - name: Generate Android Files (Customizations Applied Here)
         run: |
-          cat > android-template/app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
+          PKG="${{ github.event.inputs.package_name }}"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          ORIENTATION="${{ github.event.inputs.orientation }}"
+          PERMS="${{ github.event.inputs.permissions }}"
+          
+          mkdir -p android-template/app/src/main/res/values
+          mkdir -p android-template/app/src/main/java/$PKG_PATH
+
+          # 1. Build.gradle Generate
+          cat > android-template/app/build.gradle << EOF
+          plugins { id 'com.android.application' }
           android {
-              namespace '__PKG_NAME__'
+              namespace '$PKG'
               compileSdk 34
               defaultConfig {
-                  applicationId "__PKG_NAME__"
+                  applicationId "$PKG"
                   minSdk 24
                   targetSdk 34
-                  versionCode __VERSION_CODE__
-                  versionName "__VERSION__"
+                  versionCode ${{ github.event.inputs.version_code }}
+                  versionName "${{ github.event.inputs.version }}"
               }
               signingConfigs {
                   release {
                       storeFile file("saiko-release.jks")
-                      storePassword "__STORE_PASS__"
-                      keyAlias "__KEY_ALIAS__"
-                      keyPassword "__KEY_PASS__"
+                      storePassword "${{ secrets.KEYSTORE_PASSWORD }}"
+                      keyAlias "${{ secrets.KEY_ALIAS }}"
+                      keyPassword "${{ secrets.KEY_PASSWORD }}"
                   }
               }
               buildTypes {
                   release {
                       signingConfig signingConfigs.release
                       minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
           EOF
-          # Inject secrets safely
-          sed -i "s/__PKG_NAME__/${{ github.event.inputs.package_name }}/g" android-template/app/build.gradle
-          sed -i "s/__VERSION_CODE__/${{ github.event.inputs.version_code }}/g" android-template/app/build.gradle
-          sed -i "s/__VERSION__/${{ github.event.inputs.version }}/g" android-template/app/build.gradle
-          sed -i "s/__STORE_PASS__/${{ secrets.KEYSTORE_PASSWORD }}/g" android-template/app/build.gradle
-          sed -i "s/__KEY_ALIAS__/${{ secrets.KEY_ALIAS }}/g" android-template/app/build.gradle
-          sed -i "s/__KEY_PASS__/${{ secrets.KEY_PASSWORD }}/g" android-template/app/build.gradle
 
-      - name: Create AndroidManifest & Java
-        run: |
-          # (Manifest and MainActivity generation code remains mostly same, adding orientation)
-          PERMS="${{ github.event.inputs.permissions }}"
-          ORIENTATION="${{ github.event.inputs.orientation }}"
+          # 2. Strings.xml (App Name)
+          echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/strings.xml
+          echo '<resources>' >> android-template/app/src/main/res/values/strings.xml
+          echo "    <string name=\"app_name\">$APP_NAME</string>" >> android-template/app/src/main/res/values/strings.xml
+          echo '</resources>' >> android-template/app/src/main/res/values/strings.xml
+
+          # 3. Theme
+          echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/styles.xml
+          echo '<resources>' >> android-template/app/src/main/res/values/styles.xml
+          echo '    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar" />' >> android-template/app/src/main/res/values/styles.xml
+          echo '</resources>' >> android-template/app/src/main/res/values/styles.xml
+
+          # 4. AndroidManifest (Permissions & Orientation)
           echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/AndroidManifest.xml
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' >> android-template/app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> android-template/app/src/main/AndroidManifest.xml
           IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
           for PERM in "${PERM_ARRAY[@]}"; do
             echo "    <uses-permission android:name=\"android.permission.$PERM\" />" >> android-template/app/src/main/AndroidManifest.xml
@@ -158,35 +129,31 @@ jobs:
           echo '    </application>' >> android-template/app/src/main/AndroidManifest.xml
           echo '</manifest>' >> android-template/app/src/main/AndroidManifest.xml
 
-          # Java file (same as before, omitted for brevity)
-          # ... [Paste MainActivity.java creation code here] ...
+          # 5. MainActivity.java (Package Name) - Copy from previous reliable code
+          # (Use the same cat command from previous message to generate MainActivity.java with package $PKG)
+
+      - name: Custom Icon Apply
+        run: |
+          cd android-template
+          if [ -f "app/src/main/assets/www/icon.png" ]; then
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+                cp "app/src/main/assets/www/icon.png" "app/src/main/res/mipmap-$density/ic_launcher.png"
+            done
+          fi
 
       - name: Build Outputs
         run: |
           cd android-template
-          if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then
-            gradle assembleDebug
-          elif [ "${{ github.event.inputs.build_type }}" = "release" ]; then
-            gradle assembleRelease bundleRelease
-          else
-            gradle assembleDebug assembleRelease bundleRelease
-          fi
+          if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then gradle assembleDebug;
+          elif [ "${{ github.event.inputs.build_type }}" = "release" ]; then gradle assembleRelease bundleRelease;
+          else gradle assembleDebug assembleRelease bundleRelease; fi
 
-      - name: Upload to Release
+      - name: Upload Outputs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd android-template
           TAG="${{ github.event.inputs.tag_name }}"
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk
-            gh release upload "$TAG" "app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk" --repo "${{ github.repository }}" --clobber
-          fi
-          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Saiko-Release-$TAG.apk
-            gh release upload "$TAG" "app/build/outputs/apk/release/Saiko-Release-$TAG.apk" --repo "${{ github.repository }}" --clobber
-          fi
-          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then
-            cp app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/Saiko-Release-$TAG.aab
-            gh release upload "$TAG" "app/build/outputs/bundle/release/Saiko-Release-$TAG.aab" --repo "${{ github.repository }}" --clobber
-          fi
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk; gh release upload "$TAG" "app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk" --repo "${{ github.repository }}" --clobber; fi
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Saiko-Release-$TAG.apk; gh release upload "$TAG" "app/build/outputs/apk/release/Saiko-Release-$TAG.apk" --repo "${{ github.repository }}" --clobber; fi
+          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then cp app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/Saiko-Release-$TAG.aab; gh release upload "$TAG" "app/build/outputs/bundle/release/Saiko-Release-$TAG.aab" --repo "${{ github.repository }}" --clobber; fi
