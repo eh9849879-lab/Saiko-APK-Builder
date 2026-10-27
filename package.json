@@ -1,12 +1,13 @@
 {
   "name": "saiko-apk-builder",
   "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "start": "node server.js"
+  "description": "Saiko APK Builder Backend",
+  "main": "api/index.js",
+  "engines": {
+    "node": "20.x"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "multer": "^2.0.2"
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
   }
 }
