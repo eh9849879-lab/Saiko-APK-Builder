@@ -61,7 +61,6 @@ jobs:
           ROOT_DIR=$(dirname "$INDEX_PATH")
           cp -r "$ROOT_DIR"/* android-template/app/src/main/assets/www/
           
-          # ✅ Naya: Round icon ka dummy bhi banaya
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android-template/app/src/main/res/mipmap-$density
               echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android-template/app/src/main/res/mipmap-$density/ic_launcher.png
@@ -80,24 +79,25 @@ jobs:
           mkdir -p android-template/app/src/main/java/$PKG_PATH
           mkdir -p android-template/app/src/main/res/values
 
-          cat > android-template/app/build.gradle << EOF
+          # ✅ SAFE TRICK: Use unique identifiers to avoid bash syntax errors
+          cat > android-template/app/build.gradle << 'GRADLE_EOF'
           plugins { id 'com.android.application' }
           android {
-              namespace '$PKG'
+              namespace 'GRADLE_PKG'
               compileSdk 34
               defaultConfig {
-                  applicationId "$PKG"
+                  applicationId "GRADLE_PKG"
                   minSdk 24
                   targetSdk 34
-                  versionCode ${{ github.event.inputs.version_code }}
-                  versionName "${{ github.event.inputs.version }}"
+                  versionCode GRADLE_VER_CODE
+                  versionName "GRADLE_VER_NAME"
               }
               signingConfigs {
                   release {
                       storeFile file("saiko-release.jks")
-                      storePassword "${{ secrets.KEYSTORE_PASSWORD }}"
-                      keyAlias "${{ secrets.KEY_ALIAS }}"
-                      keyPassword "${{ secrets.KEY_PASSWORD }}"
+                      storePassword "GRADLE_KEY_PASS"
+                      keyAlias "GRADLE_KEY_ALIAS"
+                      keyPassword "GRADLE_KEY_PASS"
                   }
               }
               buildTypes {
@@ -108,7 +108,14 @@ jobs:
               }
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
-          EOF
+          GRADLE_EOF
+
+          # Replace placeholders safely using sed
+          sed -i "s|GRADLE_PKG|$PKG|g" android-template/app/build.gradle
+          sed -i "s|GRADLE_VER_CODE|${{ github.event.inputs.version_code }}|g" android-template/app/build.gradle
+          sed -i "s|GRADLE_VER_NAME|${{ github.event.inputs.version }}|g" android-template/app/build.gradle
+          sed -i "s|GRADLE_KEY_PASS|${{ secrets.KEYSTORE_PASSWORD }}|g" android-template/app/build.gradle
+          sed -i "s|GRADLE_KEY_ALIAS|${{ secrets.KEY_ALIAS }}|g" android-template/app/build.gradle
 
           echo '<?xml version="1.0" encoding="utf-8"?>' > android-template/app/src/main/res/values/strings.xml
           echo '<resources>' >> android-template/app/src/main/res/values/strings.xml
@@ -128,9 +135,6 @@ jobs:
           echo '    <uses-permission android:name="android.permission.RECORD_AUDIO" />' >> android-template/app/src/main/AndroidManifest.xml
           echo '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' >> android-template/app/src/main/AndroidManifest.xml
           echo '    <uses-permission android:name="android.permission.CAMERA" />' >> android-template/app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' >> android-template/app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' >> android-template/app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />' >> android-template/app/src/main/AndroidManifest.xml
           
           IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
           for PERM in "${PERM_ARRAY[@]}"; do
@@ -144,8 +148,9 @@ jobs:
           echo '    </application>' >> android-template/app/src/main/AndroidManifest.xml
           echo '</manifest>' >> android-template/app/src/main/AndroidManifest.xml
 
-          cat > android-template/app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
-          package com.saiko.webapp;
+          # ✅ SAFE TRICK FOR JAVA: No syntax errors inside the block
+          cat > android-template/app/src/main/java/$PKG_PATH/MainActivity.java << 'JAVA_EOF'
+          package JAVA_PKG;
 
           import android.Manifest;
           import android.app.Activity;
@@ -190,6 +195,99 @@ jobs:
                   settings.setAllowFileAccess(true);
                   settings.setAllowContentAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                          view.loadUrl("file:///android_asset/www/index.html");
+                      }
+                  });
+
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                          if (MainActivity.this.filePathCallback != null) {
+                              MainActivity.this.filePathCallback.onReceiveValue(null);
+                          }
+                          MainActivity.this.filePathCallback = filePathCallback;
+                          Intent intent = fileChooserParams.createIntent();
+                          try {
+                              startActivityForResult(intent, FILECHOOSER_RESULTCODE);
+                          } catch (Exception e) {
+                              MainActivity.this.filePathCallback = null;
+                              return false;
+                          }
+                          return true;
+                      }
+
+                      @Override
+                      public void onPermissionRequest(final PermissionRequest request) {
+                          runOnUiThread(new Runnable() {
+                              @Override
+                              public void run() {
+                                  request.grant(request.getResources());
+                              }
+                          });
+                      }
+                  });
+
+                  webView.loadUrl("file:///android_asset/www/index.html");
+              }
+              
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQUEST_CODE && pendingWebPermissionRequest != null) {
+                      pendingWebPermissionRequest.grant(pendingWebPermissionRequest.getResources());
+                      pendingWebPermissionRequest = null;
+                  }
+              }
+
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+                  if (requestCode == FILECHOOSER_RESULTCODE) {
+                      if (filePathCallback != null) {
+                          filePathCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, intent));
+                          filePathCallback = null;
+                      }
+                  } else {
+                      super.onActivityResult(requestCode, resultCode, intent);
+                  }
+              }
+          }
+          JAVA_EOF
+          
+          # Safely replace the package name in Java file
+          sed -i "s|JAVA_PKG|$PKG|g" android-template/app/src/main/java/$PKG_PATH/MainActivity.java
+
+      - name: Custom Icon Apply
+        run: |
+          cd android-template
+          if [ -f "app/src/main/assets/www/icon.png" ]; then
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+                cp "app/src/main/assets/www/icon.png" "app/src/main/res/mipmap-$density/ic_launcher.png"
+                cp "app/src/main/assets/www/icon.png" "app/src/main/res/mipmap-$density/ic_launcher_round.png"
+            done
+          fi
+
+      - name: Build Outputs
+        run: |
+          cd android-template
+          if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then gradle assembleDebug;
+          elif [ "${{ github.event.inputs.build_type }}" = "release" ]; then gradle assembleRelease bundleRelease;
+          else gradle assembleDebug assembleRelease bundleRelease; fi
+
+      - name: Upload Outputs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd android-template
+          TAG="${{ github.event.inputs.tag_name }}"
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk; gh release upload "$TAG" "app/build/outputs/apk/debug/Saiko-Debug-$TAG.apk" --repo "${{ github.repository }}" --clobber; fi
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Saiko-Release-$TAG.apk; gh release upload "$TAG" "app/build/outputs/apk/release/Saiko-Release-$TAG.apk" --repo "${{ github.repository }}" --clobber; fi
+          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then cp app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/Saiko-Release-$TAG.aab; gh release upload "$TAG" "app/build/outputs/bundle/release/Saiko-Release-$TAG.aab" --repo "${{ github.repository }}" --clobber; fi               settings.setMediaPlaybackRequiresUserGesture(false);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                   settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
 
